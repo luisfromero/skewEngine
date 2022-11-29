@@ -29,7 +29,7 @@ Este sería un ejemplo de problema computacionalmente intratable (salvo para map
 
 ## Algoritmo de Romero, *et al*
 
-En 2012, Romero *et al* [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). 
+En 2012, Romero *et al* [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). Es decir, para cda sector angular de un grado, sólo tiene en cuenta los puntos en el eje central del sector.
 
 <pre>
 for pov in 1,N
@@ -38,7 +38,7 @@ for pov in 1,N
 </pre>
 
 
-Además, aprovecha que todos los datos estén alineados en una dirección para reaprovechar la información en las memorias caches. Su aportación consiste en invertir el orden de los lazos:
+Además, aprovecha que todos los datos estén alineados en una dirección para reaprovechar la información en las memorias caches. Su principal aportación consiste en invertir el orden de los lazos:
 
 <pre>
 for sector in 1,360
@@ -49,7 +49,7 @@ for sector in 1,360
 En particular, dado una dirección, por ejemplo, oeste-suroeste (22º), se hace un barrido sobre todo el modelo, y se calcula la cuenca visual, sólo en esa dirección, acumulando finalmente los resultados del resto de direcciones.
 
 <p style=text-align:center;>
-<img src="https://onlinelibrary.wiley.com/cms/asset/00f4f7f7-d7c7-4275-89e0-fbbea69de97f/tgis12216-fig-0004-m.png" width=300>
+<img src="img/tgis12216-fig-0004-m.png" width=300>
 </p>
 
 En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una animación del algoritmo.
@@ -57,7 +57,7 @@ En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una ani
 
 ## Algoritmo SDEM
 
-Recientemente, *Romero et al* publican una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
+Recientemente, *Romero et al* [publican](https://www.tandfonline.com/doi/full/10.1080/13658816.2020.1844207) una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
 
 * Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea ¿por qué no colocarlos directamente en la misma línea de memoria?
 
