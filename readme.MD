@@ -57,7 +57,7 @@ En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una ani
 
 ## Algoritmo SDEM
 
-Recientemente, Romero et al publican una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
+Recientemente, *Romero et al* publican una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
 
 * Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea ¿por qué no colocarlos directamente en la misma línea de memoria?
 
