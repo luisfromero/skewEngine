@@ -27,7 +27,7 @@ Pues bien, imagine ahora que desea averiguar el punto de un territorio que tiene
 
 Este sería un ejemplo de problema computacionalmente intratable (salvo para mapas con muy pocos datos y baja resolución) si no fuera porque tienen una fuerte *dependencia radial*, que hace que la información tiene mucho más valor cuanto más próxima se sitúa respecto al punto de interés (**pov**, de *point of view*). En consecuencia, para puntos alejados, no necesitamos usar toda la información, sino sólo una parte, o ninguna.
 
-## Algoritmo de Romero, *et al*
+### Algoritmo de Romero, *et al*
 
 En 2012, Romero *et al* [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). Es decir, para cda sector angular de un grado, sólo tiene en cuenta los puntos en el eje central del sector.
 
@@ -55,7 +55,7 @@ En particular, dado una dirección, por ejemplo, oeste-suroeste (22º), se hace 
 En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una animación del algoritmo.
 
 
-## Algoritmo SDEM
+### Algoritmo SDEM
 
 Recientemente, *Romero et al* [publican](https://www.tandfonline.com/doi/full/10.1080/13658816.2020.1844207) una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
 
@@ -68,3 +68,13 @@ Nace así el algoritmo skew-DEM (modelo sesgado del terreno), que se basa en la 
 <p style=text-align:center;>
 <img src="img/skew1.png" width=600>
 </p>
+
+En el siguiente [video](https://youtu.be/KIL9UjuGm8U) se visualiza gráficamente el sesgado del territorio, y se estudia la posibilidad de hacer mejoras de rendimiento mediante blocking.
+
+
+## Propuesta
+
+Generalizar la idea y extenderla a cualquier algoritmo
+
+
+
