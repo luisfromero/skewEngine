@@ -62,19 +62,19 @@ En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una ani
 
 ### Algoritmo SDEM
 
-Recientemente, *Romero et al* [publican](https://www.tandfonline.com/doi/full/10.1080/13658816.2020.1844207) una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
+Recientemente (2021), *Romero et al* [publican](https://www.tandfonline.com/doi/full/10.1080/13658816.2020.1844207) una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
 
 * Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea ¿por qué no colocarlos directamente en la misma línea de memoria?
 
 * Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea (no hay dependencia con otras líneas), ¿por qué no trabajar en paralelo con todas las líneas simultáneamente, usando además, GPUs?
 
-Nace así el algoritmo skew-DEM (modelo sesgado del terreno), que se basa en la idea de colocar los datos en memoria de una forma apropiada para el cálculo en una determinada dirección, ya que el coste de "deconstruir y reconstruir el mapa" merece la pena, teniendo en cuenta la intensidad de los cálculos que se van a realizar sobre los datos "sesgados".
+Nace así el algoritmo sDEM (de skew-DEM, modelo sesgado de elevaciones), que se basa en la idea de colocar los datos en memoria de una forma apropiada para el cálculo en una determinada dirección, ya que el coste de "deconstruir y reconstruir el mapa" merece la pena, teniendo en cuenta la intensidad de los cálculos que se van a realizar sobre los datos en su estado "sesgado".
 
 <p style=text-align:center;>
 <img src="img/skew1.png" width=600>
 </p>
 
-En el siguiente [video](https://youtu.be/KIL9UjuGm8U) se visualiza gráficamente el sesgado del territorio, y se estudia la posibilidad de hacer mejoras de rendimiento mediante blocking.
+En el siguiente [video](https://youtu.be/KIL9UjuGm8U) se visualiza gráficamente el sesgado del territorio, e incluiso se estudia la posibilidad de hacer mejoras de rendimiento mediante blocking.
 
 <br/>
 
@@ -103,7 +103,7 @@ El código main debe realizar:
 
     4.2. **Procesamiento en CPU o GPU**
 
-    4.3. **Reparación de datos (un-skew)**
+    4.3. **Reparación de datos (deskew)**
 
 4. Recolección de resultados de las CPUs/GPUs
 
@@ -113,7 +113,6 @@ El código main debe realizar:
 ```c
 // Programa principal:
 
-<pre style=color:#880000;>
 int main(int argc, char *argv[]) {
     configure(argc, argv);
     omp_set_num_threads(nthreads);
@@ -150,7 +149,7 @@ Se propone una clase (skewEngine) que sirva para cualquier tipo de datos (entero
 
 * En la etapa 4.1, el motor se encarga de "sesgar" los datos de entrada
 * En la etapa 4.2, una función externa aplica un algoritmo supuestamente costoso
-    * resultadoSesgado = FuncionComplicada(estradaSesgada)
+    * resultadoSesgado = FuncionComplicada(estradaSesgada) Por ejemplo:
         * FuncionComplicada = cuencaVisualTotal en 1D
         * FuncionComplicada = DFT en 1D
         * FuncionComplicada = Identidad (para estimar el overhead)
@@ -167,9 +166,9 @@ int execute() {
         skewEngine<float> *skewer=new skewEngine<float>(dimx, dimy,inData);
 #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < 179; i++) {
-            skewer->startAngle(i);
-            kernelV3(skewer);
-            skewer->endAngle();
+            skewer->skew(i);
+            kernel(skewer);
+            skewer->deskew();
         }
 #pragma omp critical
         {
@@ -199,7 +198,7 @@ Los 180 sectores se clasifican en cuatro bloques, con el objeto de hacer el algo
 Antes de proceder al sesgado, se preparan 4 versiones de la imagen o modelo de entrada, a las que llamaremos Normal-Normal, Traspose-Normal, Transpose_Mirror y Normal-Mirror, que se corresponderánn con las entradas para cada uno de los conjuntos de sectores:
 
 <p style=text-align:center;>
-<img src="img/foursectors.png" width=600>
+<img src="img/foursectors.png" style="width:100%;">
 </p>
 
 ```c
@@ -221,7 +220,7 @@ indata_t prepareData(T *input)
 ```
 
 
-Ahora, a diferencia de los trabajos en sDEM, y gracias a la preparación de datos, el algoritmo no tiene que distinguir entre signos para la tangentes, ni tipos de acceso. El procesamiento es similar en los cuatro casos. Consiste, básicamente, en sesgar los datos de entrada.
+Ahora, a diferencia de los trabajos en sDEM, y gracias a la preparación de datos, el algoritmo no tiene que distinguir entre signos para la tangentes, ni tipos de acceso. El procesamiento es similar en los cuatro casos. Consiste, básicamente, en sesgar los datos de entrada, mediante un mecanismo simple de interpolación.
 
 <p style=text-align:center;>
 <img src="img/skew3.png" width=600>
@@ -236,12 +235,11 @@ En concreto, será necesario calcular varios parámetros simples, como el ángul
 
 Finalmente, hay que tener en cuenta que al sesgar los datos de entrada (al pasar del rectángulo al romboide), cada elemento de entrada se va a ubicar en la misma columna, pero en un lugar intermedio entre dos filas del array destino. Por ese motivo, necesitamos calcular, un par de vectores que sólo dependen del índice de columna: ```target``` y ```weight```, siendo ```target``` el nº de filas que avanza un determinado punto hacia abajo (redondeado a inferior), y ```weight``` un factor de ponderación entre ```target``` y ```target+1```. En la imagen anterior se representan en rojo.
 
-Por último, calcularemos el número de filas que se van a procesar sobre el modelo sesgado, ```lastRow```, así como los límites de cada fila, que dependen de ```newAngle``` y ```offset```, y de ```dim_i, dim_o```
+Por último, calcularemos el número de filas que se van a procesar sobre el modelo sesgado, ```skewHeight```, así como los límites de cada fila, que dependen de ```newAngle``` y ```offset```, y de ```dim_i, dim_o```
 
 <p style=text-align:center;>
-<img src="img/skew5.png" width=600>
+<img src="img/skew5.png" width=500>
 </p>
-
 
 
 <br/>
@@ -251,14 +249,18 @@ Por último, calcularemos el número de filas que se van a procesar sobre el mod
 Una vez preparado los datos. El algoritmo intensivo es un simple bucle, que se puede ejecutar con paralelismo anidado:
 
 ```c
-for(int i=0;i<=lastRow;i++>)
+for(int i=0;i<skewHeight;i++>)
     outputSkewed[i]=kernel(inputSkewed[i],first[i],last[i]);
 ```
 
+Es importante no olvidar que el espacio se ha deformado, por lo que las distancias que se apliquen en el algoritmo (si se necesitan) tienen un factor de escala ```1``` en vertical y ```1/cos(newAngle)``` en horizontal.
+
 ## Reconstrucción de los datos no sesgados:
 
+El proceso de interpolación de los resultados es mucho más simple, ya que no es necesario computar nuevos parámetros. 
+
 ```c
-skewEngine::end()
+skewEngine::deskew()
 {
     T *output;
     if(sectorType==0)output=output0;
