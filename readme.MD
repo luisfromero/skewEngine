@@ -7,7 +7,7 @@ Un algoritmo para el cálculo intensivo de datos bidimensionales con una fuerte 
 
 ## Introducción
 
-Existen problemas en la literatura en los que es necesario realizar un cálculo extremadamente intensivo sobre cada uno de los puntos de una malla bidimensional de datos, como por ejemplo, sobre cada uno de los píxeles de una imagen, o sobre cualquier punto de un mapa. 
+Existen problemas, en muchos y muy diversos campos, en los que es necesario realizar un cálculo extremadamente intensivo sobre cada uno de los puntos de una malla de datos 2D o 3D, como por ejemplo, sobre cada uno de los píxeles de una imagen, sobre cualquier punto de un mapa, o en los datos de una resonancia magnética. 
 
 En algunos casos, la intensidad aritmética es tan alta, que hace que el problema sea intratable, desde el punto de vista computacional.
 
@@ -19,7 +19,7 @@ Veamos el ejemplo de la cuenca visual de un punto, en un modelo digital de eleva
 
 Como es obvio, para saber si desde A se puede ver B (donde B puede ser cualquier punto), habría que tener en cuenta la altura del resto de puntos, por ejemplo, C, que pueden ser un obstáculo para la visión. 
 
-En un modelo digital (**DEM**, de *digital elevation model*), con N = dimx·dimy datos, la complejidad del problema, usando la notación big-O, sería O(N<sup>2</sup>), aunque es evidente que dicha complejidad se puede reducir si sólo se consideran como obstáculos los puntos C que están en la línea A-B. Aún así, el problema, de complejidad O(N<sup>1.5</sup>) es bastante lento. La aplicación Google Earth, por ejemplo, tarda varios segundos en obtener un resultado aproximado.
+En un modelo digital (**DEM**, de *digital elevation model*), con N = dimx·dimy datos, la complejidad del problema, usando la notación big-O, sería O(N<sup>2</sup>), aunque es evidente que dicha complejidad se puede reducir si sólo se consideran como obstáculos los puntos C que están en la línea A-B. Aún así, el problema, de complejidad O(N<sup>1.5</sup>), es bastante lento. La aplicación Google Earth, por ejemplo, tarda varios segundos en obtener un resultado aproximado.
 
 
 <p style=text-align:center;>
@@ -34,7 +34,7 @@ Este sería un ejemplo de problema computacionalmente intratable (salvo para map
 
 ### Algoritmo de Romero, *et al*
 
-En 2012, Romero *et al* [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). Es decir, para cda sector angular de un grado, sólo tiene en cuenta los puntos en el eje central del sector.
+En 2012, Romero *et al* [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). Es decir, para cada sector angular de un grado, sólo tiene en cuenta los puntos en el eje central del sector.
 
 <pre>
 for pov in 1,N
@@ -51,7 +51,7 @@ for sector in 1,360
         viewshed[pov] = function(sector,DEM)
 </pre>
 
-En particular, dado una dirección, por ejemplo, oeste-suroeste (22º), se hace un barrido sobre todo el modelo, y se calcula la cuenca visual, sólo en esa dirección, acumulando finalmente los resultados del resto de direcciones.
+En particular, dado una dirección, por ejemplo, oeste-suroeste (~22º), se hace un barrido sobre todo el modelo, en dirección transversal, y se calcula la cuenca visual, sólo en esa dirección, acumulando finalmente los resultados del resto de direcciones.
 
 <p style=text-align:center;>
 <img src="img/tgis12216-fig-0004-m.png" width=300>
@@ -65,7 +65,7 @@ En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una ani
 
 Recientemente (2021), *Romero et al* [publican](https://www.tandfonline.com/doi/full/10.1080/13658816.2020.1844207) una importante modificación del algoritmo en el que se consideran dos aspectos claves para mejorar aún más el rendimiento:
 
-* Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea ¿por qué no colocarlos directamente en la misma línea de memoria?
+* Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea ¿por qué no colocarlos directamente en la misma línea de memoria, para aprovechar la localidad espacial?
 
 * Si, dado un sector, sólo vamos a utilizar el resto de puntos que están en la misma línea (no hay dependencia con otras líneas), ¿por qué no trabajar en paralelo con todas las líneas simultáneamente, usando además, GPUs?
 
@@ -106,8 +106,9 @@ El código main debe realizar:
 
     4.3. **Reparación de datos (deskew)**
 
-4. Recolección de resultados de las CPUs/GPUs
+5. Recolección de resultados de las CPUs/GPUs
 
+Considerando la anterior estructura, se propone el siguiente código:
 
 <br>
 
@@ -121,6 +122,8 @@ int main(int argc, char *argv[]) {
     deallocate();
     return 0;
     }
+
+// Función de cálculo
 
 int execute() {
     inData_t inData=prepareData();
@@ -144,7 +147,7 @@ int execute() {
 
 ## La clase skewEngine
 
-Se propone una clase (skewEngine) que sirva para cualquier tipo de datos (enteros, flotantes, double, o píxeles, por ejemplo) y que se encargue de todo lo relacionado con la preparación de los datos:
+Se propone a continuación una clase (skewEngine) que sirva para cualquier tipo de datos (enteros, flotantes, double, o píxeles, por ejemplo) y que se encargue de todo lo relacionado con la preparación de los datos:
 
 * Se debe crear un objeto skewEngine en cada hilo, ya sea CPU o GPU. Se hace en la etapa 3. Llamaremos *motores* a dichos objetos.
 
@@ -186,11 +189,11 @@ int execute() {
 ---
 ## Implementación de skewEngine
 
-Consideremos la siguiente imagen a la que queremos aplicar el algoritmo. En primer lugar, hay que considerar que:
+Consideremos una imagen o mapa 2D (todo es extrapolable a 3D de forma anidada) a la que queremos aplicar el algoritmo. En primer lugar, hay que considerar que:
 
-Los datos alineados se procesan de izquierda a derecha y viceversa, por lo que sólo se consideran 180º de trabajo.
+* Los datos alineados se procesan de izquierda a derecha y viceversa, por lo que sólo se consideran 180º de trabajo.
 
-Los 180 sectores se clasifican en cuatro bloques, con el objeto de hacer el algoritmo más simple y eficiente. Los cuatro bloques dependen del aspect-ratio de los datos de entrada, y en particular, de la variable ``fAngle=atan(dimy/dimx)``, es decir, ``set0=[0,fAngle[, set1=[fAngle,90[, set2=[90,180-fAngle[, set3=[180-fAngle,180[``
+* Los 180 sectores se clasifican en cuatro bloques, con el objeto de hacer el algoritmo más simple y eficiente. Los cuatro bloques dependen del aspect-ratio de los datos de entrada, y en particular, de la variable ``fAngle=atan(dimy/dimx)``, es decir, ``set0=[0,fAngle[, set1=[fAngle,90[, set2=[90,180-fAngle[, set3=[180-fAngle,180[``
 
 En la siguiente imagen (fotografía de [Manuel Rueda](https://www.instagram.com/zappa_)) se muestran 4 ángulos de cada uno de los conjuntos:
 
@@ -230,13 +233,13 @@ Ahora, a diferencia de los trabajos en sDEM, y gracias a la preparación de dato
 </p>
 
 
-En concreto, será necesario calcular varios parámetros simples, como el ángulo de sesgo (```newAngle```), el desplazamiento que tendrá la última columna (```offset```), las dimensiones verticales y horizontales de la correspondiente versión de entrada (```dim_o, dim_i```) y que serán los límites de los lazos externos e interno que recorran los datos.
+En concreto, será necesario calcular varios parámetros simples, como el ángulo de sesgo (```newAngle```), el desplazamiento que tendrá la última columna (```offset```), las dimensiones verticales y horizontales de la correspondiente versión de entrada (```dim_o, dim_i```) y que serán los límites de los lazos externos e interno (outer, _o, e inner, _i) que recorran los datos.
 
 <p style=text-align:center;>
 <img src="img/skew4.png" width=600>
 </p>
 
-Finalmente, hay que tener en cuenta que al sesgar los datos de entrada (al pasar del rectángulo al romboide), cada elemento de entrada se va a ubicar en la misma columna, pero en un lugar intermedio entre dos filas del array destino. Por ese motivo, necesitamos calcular, un par de vectores que sólo dependen del índice de columna: ```target``` y ```weight```, siendo ```target``` el nº de filas que avanza un determinado punto hacia abajo (redondeado a inferior), y ```weight``` un factor de ponderación entre ```target``` y ```target+1```. En la imagen anterior se representan en rojo.
+Finalmente, hay que tener en cuenta que al sesgar los datos de entrada (al pasar del rectángulo al romboide), cada elemento de entrada se va a ubicar en la misma columna, pero en un lugar intermedio entre dos filas del array destino. Por ese motivo, necesitamos calcular un par de vectores que sólo dependen del índice de columna: ```target``` y ```weight```, siendo ```target``` el nº de filas que avanza un determinado punto hacia abajo (redondeado a inferior), y ```weight``` un factor de ponderación según la ubicación entre ```target``` y ```target+1```. En la imagen anterior se representan en rojo dichos parámetros independientes de la fila.
 
 <br/>
 
@@ -258,7 +261,7 @@ Finalmente, hay que tener en cuenta que al sesgar los datos de entrada (al pasar
     offset=dim_i  * skewness;
     for (int j = 0; j < dim_i; j++) {
         double drift = skewness * j;
-        target[j] = drift;
+        target[j] = drift; //round to integer
         weight[j] = drift - target[j]; //weight is lower when drift is close to target
     }
     skewHeight=dim_o+target[dim_i-1]+1;
@@ -385,7 +388,23 @@ Dichos coeficientes son diferentes en distintas partes de la imagen
 <img src="img/blurred1.jpeg" height=180> 
 </p>
 
-Creo que en cada punto de la imagen y en cada dirección hay que hacer una DFT para averiguar si hay movimiento en dicha dirección y en qué cantidad
+Creo que en cada punto de la imagen y en cada dirección hay que hacer una DFT para averiguar si hay movimiento en dicha dirección y en qué cantidad.
+
+## Próximos pasos
+
+Buscar dos imágenes con parte borrosa total y por zonas y pasarla a mapa de píxeles grises
+
+Sacar un perfil de un ángulo y obtener DFT (1D) con matlab
+
+como la del autobús, con más resolución, p.e.
+
+
+Meter el código
+
+Creo que necesitaría un parámetro de radio de búsqueda en la dft 
+
+Leer libro computer graphics
+
 
 
 
