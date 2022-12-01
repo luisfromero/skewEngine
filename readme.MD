@@ -198,7 +198,7 @@ En la siguiente imagen (fotografía de [Manuel Rueda](https://www.instagram.com/
 <img src="img/allsector.png" width=600>
 </p>
 
-Antes de proceder al sesgado, se preparan 4 versiones de la imagen o modelo de entrada, a las que llamaremos Normal-Normal, Traspose-Normal, Transpose_Mirror y Normal-Mirror, que se corresponderán con las entradas que necesitarían los ángulos de cada uno de los conjuntos de sectores:
+Antes de proceder al sesgado, se preparan 4 versiones de la imagen o modelo de entrada, a las que podríamos llamar *Normal-Normal, Transpose-Normal, Transpose-Mirror y Normal-Mirror*, y que se corresponderán con las entradas que necesitaría el algoritmo para los ángulos de cada uno de los conjuntos de sectores:
 
 <p style=text-align:center;>
 <img src="img/foursectors.png" style="width:100%;">
