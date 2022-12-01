@@ -191,6 +191,8 @@ Los datos alineados se procesan de izquierda a derecha y viceversa, por lo que s
 
 Los 180 sectores se clasifican en cuatro bloques, con el objeto de hacer el algoritmo más simple y eficiente. Los cuatro bloques dependen del aspect-ratio de los datos de entrada, y en particular, de la variable ``fAngle=atan(dimy/dimx)``, es decir, ``set0=[0,fAngle[, set1=[fAngle,90[, set2=[90,180-fAngle[, set3=[180-fAngle,180[``
 
+En la siguiente imagen (fotografía de [Manuel Rueda](https://www.instagram.com/zappa_)) se muestran 4 ángulos de cada uno de los conjuntos:
+
 <p style=text-align:center;>
 <img src="img/allsector.png" width=600>
 </p>
@@ -274,6 +276,9 @@ skewEngine::deskew()
                     weight[j]*skewOutput[(i+target[j]+1)*dim_i+j];
 }
 ```
+
+El archivo [skewEngine.MD](skewEngine.MD) muestra cómo quedaría la clase skewEngine.
+
 <br>
 
 ---
