@@ -1,4 +1,5 @@
 # SkewEngine
+Luis Felipe Romero
 
 Un algoritmo para el cálculo intensivo de datos bidimensionales con una fuerte dependencia radial
 
