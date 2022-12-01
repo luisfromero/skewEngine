@@ -191,11 +191,13 @@ Los datos alineados se procesan de izquierda a derecha y viceversa, por lo que s
 
 Los 180 sectores se clasifican en cuatro bloques, con el objeto de hacer el algoritmo más simple y eficiente. Los cuatro bloques dependen del aspect-ratio de los datos de entrada, y en particular, de la variable ``fAngle=atan(dimy/dimx)``, es decir, ``set0=[0,fAngle[, set1=[fAngle,90[, set2=[90,180-fAngle[, set3=[180-fAngle,180[``
 
+En la siguiente imagen (fotografía de [Manuel Rueda](https://www.instagram.com/zappa_)) se muestran 4 ángulos de cada uno de los conjuntos:
+
 <p style=text-align:center;>
 <img src="img/allsector.png" width=600>
 </p>
 
-Antes de proceder al sesgado, se preparan 4 versiones de la imagen o modelo de entrada, a las que llamaremos Normal-Normal, Traspose-Normal, Transpose_Mirror y Normal-Mirror, que se corresponderánn con las entradas para cada uno de los conjuntos de sectores:
+Antes de proceder al sesgado, se preparan 4 versiones de la imagen o modelo de entrada, a las que llamaremos Normal-Normal, Traspose-Normal, Transpose_Mirror y Normal-Mirror, que se corresponderán con las entradas que necesitarían los ángulos de cada uno de los conjuntos de sectores:
 
 <p style=text-align:center;>
 <img src="img/foursectors.png" style="width:100%;">
@@ -220,7 +222,7 @@ indata_t prepareData(T *input)
 ```
 
 
-Ahora, a diferencia de los trabajos en sDEM, y gracias a la preparación de datos, el algoritmo no tiene que distinguir entre signos para la tangentes, ni tipos de acceso. El procesamiento es similar en los cuatro casos. Consiste, básicamente, en sesgar los datos de entrada, mediante un mecanismo simple de interpolación.
+Ahora, a diferencia de los trabajos en sDEM, y gracias a la preparación de datos, el algoritmo no tiene que distinguir entre signos para la tangentes, ni tipos de acceso, ni está limitado a modelos cuadrados. El procesamiento es similar en los cuatro casos. Consiste, básicamente, en sesgar los datos de entrada, mediante un mecanismo simple de interpolación.
 
 <p style=text-align:center;>
 <img src="img/skew3.png" width=600>
@@ -246,7 +248,7 @@ Por último, calcularemos el número de filas que se van a procesar sobre el mod
 
 ## Computación intensiva
 
-Una vez preparado los datos. El algoritmo intensivo es un simple bucle, que se puede ejecutar con paralelismo anidado:
+Una vez preparado los datos, el algoritmo intensivo es un simple bucle, que se puede ejecutar con paralelismo anidado:
 
 ```c
 for(int i=0;i<skewHeight;i++>)
@@ -257,7 +259,7 @@ Es importante no olvidar que el espacio se ha deformado, por lo que las distanci
 
 ## Reconstrucción de los datos no sesgados:
 
-El proceso de interpolación de los resultados es mucho más simple, ya que no es necesario computar nuevos parámetros. 
+El proceso de interpolación de los resultados es mucho más simple, ya que no es necesario computar nuevos parámetros. Para ello, definimos un método para el "enderezado": 
 
 ```c
 skewEngine::deskew()
@@ -274,6 +276,31 @@ skewEngine::deskew()
                     weight[j]*skewOutput[(i+target[j]+1)*dim_i+j];
 }
 ```
+
+## Reducción
+
+Cuando una CPU o GPU termina de procesar los sectores que le han sido asignado, tiene que pasar a la fase crítica de reducción. El correspondiente thread puede tener datos de sectores asignados a más de un tipo de los 4 conjuntos, por lo que se apoya en cuatro variables booleanas. En este momento, los datos traspuestos o en espejo recuperan la ubicación original:
+
+```c
+#pragma omp critical
+    {
+    for (int i = 0; i < dimy; i++){
+        int ci=dimy-1-i;
+        for (int j = 0; j < dimx; j++) {
+            int cj=dimx-1-j;
+            if (skewer->has0)outData[i][j] += skewer->output0[i * dimx + j];
+            if (skewer->has1)outData[i][j] += skewer->output1[j * dimy +ci];
+            if (skewer->has2)outData[i][j] += skewer->output2[cj* dimy +ci];
+            if (skewer->has3)outData[i][j] += skewer->output3[i * dimx +cj];
+        }
+    }
+    }
+
+```
+
+
+El archivo [skewEngine.MD](skewEngine.MD) muestra cómo quedaría la clase skewEngine.
+
 <br>
 
 ---
