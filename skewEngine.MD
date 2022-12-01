@@ -1,5 +1,14 @@
 ```c
+
 #define _USE_MATH_DEFINES
+template <typename T>
+struct inputData{
+    T *input0;
+    T *input1;
+    T *input2;
+    T *input3;
+};
+
 
 #include <math.h>
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
@@ -10,43 +19,51 @@
 // T can be float, double, ...
 template <typename T>
 class skewEngine {
+
+
+    inputData<T> input;
     int dimx;
     int dimy;
     int N;
-    T fAngle;
+    double fAngle;
     int *target;
-    T *weight;
+    double *weight;
     double torads=M_PI/180.0;
 
     // Regular or Transposed
     bool isT;
     // Below or above 90, is mirrored
     bool isM;
-public:
-    skewEngine(int dimx, int dimy, T *input0, T *input1, T *input2, T *input3);
-    virtual ~skewEngine();
-    void skew(int angle);
-    void deskew();
-    
+
     int sectorType;
-    T *input0;
-    T *input1;
-    T *input2;
-    T *input3;
     T *output0=nullptr;
     T *output1=nullptr;
     T *output2=nullptr;
     T *output3=nullptr;
+    int dim_i,dim_o,dim_l;
+
+public:
+    skewEngine(int dimx, int dimy, inputData<T> inData );
+    virtual ~skewEngine();
+    void skew(int angle);
+    void deskew();
+    void reduce(T **output);
+    static inputData<T> prepare(T *inputD, int dimx, int dimy);
+    void identity();
+    void kernel( void (*function)(skewEngine<T> *));
+    
+    
+    
     T *skewInput;
     T *skewOutput;
-    int dim_i,dim_o,dim_l,dim_skewx,dim_skewy;
+    int dim_skewx,dim_skewy;
     bool has0=false,has1=false,has2=false,has3=false;
-    int skewHeight;
+    int skewHeight, skewWidth;
     int *first;
     int *last;
     int a;
     int newAngle;
-    T scale;
+    double scale;
     int offset;
     double skewness,iskewness;
 
@@ -54,7 +71,7 @@ public:
 
 // dimx, dimy, input has been initiated with arguments values
 template<typename T>
-skewEngine<T>::skewEngine(int dimx, int dimy, T *input0, T *input1, T *input2, T *input3) : dimx(dimx), dimy(dimy), input0(input0), input1(input1), input2(input2), input3(input3)
+skewEngine<T>::skewEngine(int dimx, int dimy, inputData<T> input) : dimx(dimx), dimy(dimy), input(input)
 {
     N=dimx*dimy;
     fAngle=(T)atan2(dimy,dimx)*180/M_PI;
@@ -68,8 +85,8 @@ skewEngine<T>::skewEngine(int dimx, int dimy, T *input0, T *input1, T *input2, T
 
     //Largest dimension
     dim_l=MAX(dimx,dimy);
-    
-    weight=new T[dim_l]();
+
+    weight=new double[dim_l]();
     target=new int[dim_l]();
     first=new int[2*dim_l]();
     last=new int[2*dim_l]();
@@ -127,31 +144,34 @@ void skewEngine<T>::skew(int angle){
     for (int j = 0; j < dim_i; j++) {
         double drift = skewness * j;
         target[j] = drift;
-        weight[j] = drift - target[j]; //weight is lower when drift is close to target
+        weight[j] = drift - floor(drift); //weight is lower when drift is close to target
     }
     skewHeight=dim_o+target[dim_i-1]+1;//Excluded
-    //for(int i=0;i<*N+dim_2i;i++)skewInput[i]=skewOutput[i]=0;
-    for(int i=0;i<=skewHeight*dim_i;i++)skewInput[i]=skewOutput[i]=0;
+    if(newAngle==0){skewHeight=dim_o;} //Needed?
+    skewWidth=dim_i;
 
-    T *source=isT?(isM?input2:input1):(isM?input3:input0);
+    //Set all to zero for clean draw
+    //for(int i=0;i<2*N+dim_i;i++)skewInput[i]=skewOutput[i]=0;
+    for(int i=0;i<=skewHeight*dim_i;i++)skewInput[i]=skewOutput[i]=0;
+    for (int i = 0;i< skewHeight; i++) {
+        first[i] = dim_i;
+        last[i] = 0;
+    }
+    T *source=(T *)isT?(isM?input.input2:input.input1):(isM?input.input3:input.input0);
     for (int i = 0; i < dim_o; i++) {
         for (int j = 0; j < dim_i; j++) {
             int row = i + target[j];
+            if(j<first[row])first[row]=j;
+            if(j+1>last[row])last[row]=j+1;
             skewInput[row * dim_i + j] += (1.0 - weight[j]) * source[dim_i * i + j];
-            skewInput[(row + 1) * dim_i + j] += weight[j] * source[dim_i * i + j];
+            row++;
+            if(j<first[row])first[row]=j;
+            if(j+1>last[row])last[row]=j+1;
+            skewInput[row * dim_i + j] += weight[j] * source[dim_i * i + j];
         }
-        //test
+    }
 
-    }
-    if(newAngle==0){skewHeight=dim_o;}
-    for (int i = 0;i< skewHeight; i++) {
-        first[i]=0;
-        last[i]=dim_i;
-        if(i<offset)last[i]=(i+1)*iskewness+1; //excluded
-        if(i>dim_o)first[i]=(i-dim_o)*iskewness+1;//
-        //skewInput[i * dim_i + first[i]] = 160;
-        //skewInput[i * dim_i + last[i]-1] = 191;
-    }
+
 }
 
 /**
@@ -163,6 +183,8 @@ void skewEngine<T>::skew(int angle){
  *    for(int j=leftl(i); j< rightl(i); j++) ... skewOutput[i] = function(skewOutput[j])
  */
 
+template<typename T>
+void skewEngine<T>::kernel(void (*function)(skewEngine<T> *)) {return function(this);}
 
 
 
@@ -192,5 +214,77 @@ void skewEngine<T>::deskew(){
                     weight[j]*skewOutput[(i+target[j]+1)*dim_i+j];
 
 }
+
+/**
+ * Critical reduction of outputs from threads
+ * Any thread can have data of any of four kind of sectors
+ * @tparam T 
+ * @param output 
+ */
+template<typename T>
+void skewEngine<T>::reduce(T **output) {
+    for (int i = 0; i < dimy; i++){
+        int ci=dimy-1-i;
+        for (int j = 0; j < dimx; j++) {
+            int cj=dimx-1-j;
+            if (has0)output[i][j] += output0[i * dimx + j];
+            if (has1)output[i][j] += output1[cj * dimy +ci];
+            if (has2)output[i][j] += output2[j * dimy +ci];
+            if (has3)output[i][j] += output3[i * dimx +cj];
+        }
+    }
+}
+
+/**
+ * Static method to create the 4 versions of input data: NN, TN, TM, NM
+ * @tparam T 
+ * @param inputD 
+ * @param dimx 
+ * @param dimy 
+ * @return 
+ */
+template<typename T>
+inputData<T> skewEngine<T>::prepare(T *inputD, int dimx, int dimy) {
+    T *input0=inputD;
+    T *input1=new float[dimx*dimy];
+    T *input2=new float[dimx*dimy];
+    T *input3=new float[dimx*dimy];
+
+    // A transpose copy of input, which is computed once to improve locality
+    for(int i=0;i<dimy;i++) {
+        int ci=dimy-1-i;
+        for (int j = 0; j < dimx; j++) {
+            int cj=dimx - 1 - j;
+            T val =
+            input0[dimx * i +  j];
+            input1[dimy *cj + ci] = val; //Blue arrow
+            input2[dimy * j + ci] = val; //Black arrow
+            input3[dimx * i + cj] = val;//Yellow arrow
+        }
+    }
+    inputData<T> result;
+    result.input0=input0;
+    result.input1=input1;
+    result.input2=input2;
+    result.input3=input3;
+
+    return result;
+
+}
+
+/**
+ * use ->kernel(identity) instead of this
+ * @tparam T 
+ */
+// Unused. Replaced by kernel(identity)
+template<typename T>
+void skewEngine<T>::identity() {
+    for(int i=0;i<skewHeight;i++){
+        int k=dim_i*i;
+        for(int j=first[i];j<last[i];j++)
+            skewOutput[k+j]=skewInput[k+j];
+    }
+}
+
 
 ```

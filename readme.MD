@@ -51,11 +51,22 @@ for sector in 1,360
         viewshed[pov] = function(sector,DEM)
 </pre>
 
+En la siguiente figura, las dos imágenes centrales de la fila interior muestran cómo, al intercambiar los lazos, se puede aprovechar para aplicar el algoritmo a todos los puntos que se encuentran alineados en la misma dirección del lazo exterior.
+
+
+<p style=text-align:center;>
+<img src="img/loopexchange2.png">
+</p>
+
+
+
 En particular, dado una dirección, por ejemplo, oeste-suroeste (~22º), se hace un barrido sobre todo el modelo, en dirección transversal, y se calcula la cuenca visual, sólo en esa dirección, acumulando finalmente los resultados del resto de direcciones.
 
 <p style=text-align:center;>
 <img src="img/tgis12216-fig-0004-m.png" width=300>
 </p>
+
+
 
 En este [video](https://www.youtube.com/watch?v=Ohs8ioyYpX09) se muestra una animación del algoritmo.
 
