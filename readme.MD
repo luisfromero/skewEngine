@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
     }
 
 int execute() {
-    inData_t inData=prepareDate();
+    inData_t inData=prepareData();
 #pragma omp parallel default(shared)
     {
         ...
@@ -161,7 +161,7 @@ Se propone una clase (skewEngine) que sirva para cualquier tipo de datos (entero
 \\  Kernel del código:
 
 int execute() {
-    inData_t inData=prepareDate();
+    inData_t inData=prepareData();
 #pragma omp parallel default(shared)
     {
         skewEngine<float> *skewer=new skewEngine<float>(dimx, dimy,inData);
@@ -218,7 +218,7 @@ indata_t prepareData(T *input)
         input3[dimx * i + cj] = val;
         }
     }
-    ... \\ return 4 arrays
+    ... \\ return 4 array of type T
 }
 ```
 
@@ -238,6 +238,32 @@ En concreto, será necesario calcular varios parámetros simples, como el ángul
 
 Finalmente, hay que tener en cuenta que al sesgar los datos de entrada (al pasar del rectángulo al romboide), cada elemento de entrada se va a ubicar en la misma columna, pero en un lugar intermedio entre dos filas del array destino. Por ese motivo, necesitamos calcular, un par de vectores que sólo dependen del índice de columna: ```target``` y ```weight```, siendo ```target``` el nº de filas que avanza un determinado punto hacia abajo (redondeado a inferior), y ```weight``` un factor de ponderación entre ```target``` y ```target+1```. En la imagen anterior se representan en rojo.
 
+<br/>
+
+## Código con los cálculos previos al sesgado
+
+```c
+    isT= angle > fAngle && a < 180-fAngle;
+    isM= angle > 90;
+    if(!isT&&!isM){has0=true;sectorType=0;newAngle=a;}
+    if( isT&&!isM){has1=true;sectorType=1;newAngle=90-a;}
+    if( isT&& isM){has2=true;sectorType=2;newAngle=a-90;}
+    if(!isT&& isM){has3=true;sectorType=3;newAngle=180-a;}
+    dim_i=isT?dimy:dimx; //inner dimension
+    dim_o=isT?dimx:dimy; //outer dimension
+    dim_skewx=dim_i;
+    dim_skewy=2*dim_o;
+    skewness=tan(newAngle*torads);
+    iskewness=1/skewness;
+    offset=dim_i  * skewness;
+    for (int j = 0; j < dim_i; j++) {
+        double drift = skewness * j;
+        target[j] = drift;
+        weight[j] = drift - target[j]; //weight is lower when drift is close to target
+    }
+    skewHeight=dim_o+target[dim_i-1]+1;
+```
+
 Por último, calcularemos el número de filas que se van a procesar sobre el modelo sesgado, ```skewHeight```, así como los límites de cada fila, que dependen de ```newAngle``` y ```offset```, y de ```dim_i, dim_o```
 
 <p style=text-align:center;>
@@ -245,9 +271,47 @@ Por último, calcularemos el número de filas que se van a procesar sobre el mod
 </p>
 
 
+
+## Cálculo de los límites del modelo sesgado
+
+```c
+    for (int i = 0;i< skewHeight; i++) 
+    {
+        first[i]=0;
+        last[i]=dim_i;
+        if(i<offset)last[i]=(i+1)*iskewness+1; //excluded
+        if(i>dim_o)first[i]=(i-dim_o)*iskewness+1;
+    }
+
+```
+
+<br>
+
+## Sesgado del modelo
+
+Por último, se ejecuta el sesgado del modelo
+
+```c
+    for(int i=0;i<=skewHeight*dim_i;i++)
+        skewInput[i]=skewOutput[i]=0;
+
+    T *source=isT?(isM?input2:input1):(isM?input3:input0);
+
+    for (int i = 0; i < dim_o; i++) {
+        for (int j = 0; j < dim_i; j++) {
+            int row = i + target[j];
+            skewInput[row * dim_i + j] += (1.0 - weight[j]) * source[dim_i * i + j];
+            skewInput[(row + 1) * dim_i + j] += weight[j] * source[dim_i * i + j];
+        }
+
+
+```
+
+
+
 <br/>
 
-## Computación intensiva
+## Computación intensiva tras el sesgado
 
 Una vez preparado los datos, el algoritmo intensivo es un simple bucle, que se puede ejecutar con paralelismo anidado:
 
