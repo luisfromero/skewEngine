@@ -403,18 +403,29 @@ Creo que en cada punto de la imagen y en cada dirección hay que hacer una DFT p
 
 ## Próximos pasos
 
-Buscar dos imágenes con parte borrosa total y por zonas y pasarla a mapa de píxeles grises
+Buscar dos imágenes con parte borrosa total y por zonas y pasarla a mapa de píxeles grises.
 
-Sacar un perfil de un ángulo y obtener DFT (1D) con matlab
-
+Hay bases de datos con imágenes borrosas
 como la del autobús, con más resolución, p.e.
 
+La gente usa una que se llama cameraman
 
-Meter el código
+Creo que hay que calcular el cepstrum de una imagen
 
-Creo que necesitaría un parámetro de radio de búsqueda en la dft 
+[Este paper me parece claro](https://www.mdpi.com/1424-8220/22/4/1635/htm#B23-sensors-22-01635)
+
+[Este tiene una imagen que explica como obtener PSF del cepstrum](https://www.researchgate.net/publication/239443817_Blind_Image_Deconvolution_Motion_Blur_Estimation)
+
+
+Meter el código del cepstrum. Lo hay en Python en github
+
+Creo que necesitaría un parámetro de radio de búsqueda en la dft  (ventana Hamming?)
 
 Leer libro computer graphics
+
+Hay mucho de analisis cepstral en sonido
+
+Ir pensando en 3D y sobre todo en el reto del SKA
 
 
 
