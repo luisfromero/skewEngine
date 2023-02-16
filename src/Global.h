@@ -1,6 +1,6 @@
 //#pragma once
-#ifndef GLOBAL_H
-#define GLOBAL_H
+#ifndef SKE_GLOBAL_H
+#define SKE_GLOBAL_H
 #include <string>
 #include <chrono>
 #include "skewEngine.cuh"

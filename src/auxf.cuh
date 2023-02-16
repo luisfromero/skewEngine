@@ -79,8 +79,6 @@ public:
 
     CpuInterfaceV3(int dimx, int dimy):dimx(dimx),dimy(dimy){};
     void AllocDEMHost(float *&input0,float *&input1,float *&input2,float *&input3,float *&output , int dim);
-    void AllocDEMHost(double *&heights, float *&h_DEM, float *&h_sDEM, float *&h_rotatedVS, float *&h_sectorVS, float **&h_multiSectorVS, int devCount, float *&h_totalVS);
-    void FreeHostMemory(float *&h_DEM, float *&h_sDEM, float *&h_rotatedVS, float *&h_sectorVS, float **&h_multiSectorVS, int devCount, float *&h_totalVS);
     void FreeHostMemory(float *&out, float *&input0, float *&input1, float *&input2, float *&input3);
 };
 class GpuInterfaceV3
@@ -91,47 +89,18 @@ public:
     const int mb = kb * kb;
     size_t size;
     int dimy, dimx;
-
+    /*
     float *d_DEM;
     float *d_sDEM;
     float *d_rotatedVS;
     float *d_sectorVS;
     float *d_totalVS;
-
+    */
     GpuInterfaceV3(int dimy, int dimx);
-
-    // Show device properties
-    void DeviceProperties();
-
-    // Allocate device data
-    void AllocDEMDevice(int deviceIndex);
-
-    // Copy data from host to device
-    void MemcpyDEM_H2D(float *&h_DEM, int deviceIndex);
-
-    // Main operations
-    void Execute(float *&h_DEM, float *&h_sDEM, float *&h_rotatedVS, float *&h_sectorVS, float *&h_totalVS, int angle, int startGPUbatch, int endGPUbatch, int deviceIndex, float POVh);
-
-    // Calculate non-rotated viewshed (only for single GPU)
-    void CalculateVS(int angle);
-
-    // Multi GPU execution
-    // void ExecuteMultiGPUopenmp(float *&h_DEM, float *&h_sDEM, float *&h_rotatedVS, float *&h_sectorVS, float *&h_totalVS, int angle);
-    void ExecuteSingleSectorMultiGPUmaster(float *&h_DEM, float *&h_sDEM, float *&h_rotatedVS, float *&h_sectorVS, float *&h_totalVS, int angle, int devCount, float POVh);
-    void ExecuteAccMultiGPUmaster(float *&h_DEM, float *&h_sDEM, float *&h_rotatedVS, float **&h_multiSectorVS, float *&h_totalVS, int maxAngle, int devCount, float POVh);
-
-    // Copy data from device to host
-    void MemcpyDEM_D2H(float *&h_sDEM, float *&h_rotatedVS, float *&h_sectorVS, float *&h_totalVS);
-    void MemcpyDEM_D2Hheterogeneous(float *&h_rotatedVS, int startGPUbatch, int endGPUbatch, int deviceIndex);
-
-    // Wait for device to end
-    void Syncronize(int deviceIndex);
 
     // Obtain current number of GPUs
     void GetNumberGPUs(int &devCount);
 
-    // Free device memory
-    void FreeDeviceMemory();
 };
 
 

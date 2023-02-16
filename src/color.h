@@ -2,8 +2,8 @@
 // Created by Felipe on 17-11-22.
 //
 
-#ifndef TVSSDEM_COLOR_H
-#define TVSSDEM_COLOR_H
+#ifndef SKE_COLOR_H
+#define SKE_COLOR_H
 
 #include "Global.h"
 
