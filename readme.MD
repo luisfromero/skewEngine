@@ -399,7 +399,40 @@ Dichos coeficientes son diferentes en distintas partes de la imagen
 <img src="img/blurred1.jpeg" height=180> 
 </p>
 
-Creo que en cada punto de la imagen y en cada dirección hay que hacer una DFT para averiguar si hay movimiento en dicha dirección y en qué cantidad.
+Creo que en cada punto de la imagen y en cada dirección hay que calcular el Cepstrum para averiguar si hay movimiento en dicha dirección y en qué cantidad.
+
+```C
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <iostream>
+#include <vector>
+
+int main() {
+  // Crea un vector de muestras de la señal
+  std::vector<double> samples = {1.0, 2.0, 3.0, 4.0};
+
+  // Calcula la FFT de la señal
+  std::vector<std::complex<double>> fft = fft(samples);
+
+  // Calcula el cepstrum de la señal
+  std::vector<double> cepstrum(fft.size());
+  for (size_t i = 0; i < cepstrum.size(); i++) {
+    cepstrum[i] = std::log(std::abs(fft[i]));
+  }
+
+  // Imprime el resultado del cepstrum
+  std::cout << "Cepstrum de la señal:" << std::endl;
+  for (const auto& value : cepstrum) {
+    std::cout << value << std::endl;
+  }
+
+  return 0;
+}
+
+\\ Autor: chat OpenAI
+```
+
 
 ## Próximos pasos
 
