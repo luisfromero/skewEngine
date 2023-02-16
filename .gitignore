@@ -1,1 +1,4 @@
 skewEngine.code-workspace
+.gitignore
+/cmake-*
+/.idea
