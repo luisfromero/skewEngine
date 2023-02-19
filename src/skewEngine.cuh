@@ -22,6 +22,8 @@
 #define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
 
 #include <cmath>
+#include <algorithm>
+
 #define _USE_MATH_DEFINES
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
@@ -268,7 +270,7 @@ void skewEngine<T>::computeParams(int angle)
     if(!isT&& isM){sectorType=3;newAngle=180-a;}
 
     // This stands for deformation in surface measures
-    scale=1/pow(cos(torads*newAngle),2);
+    //scale=1/pow(cos(torads*newAngle),2);
     scale=1/cos(torads*newAngle);
 
     // This is for drawing, only
@@ -515,10 +517,10 @@ switch(isMax) {
             for (int j = 0; j < dimx; j++) {
                 int cj = dimx - 1 - j;
 
-                if (output0 != nullptr)output[i * dimx + j] =max(output[i * dimx + j], output0[i * dimx + j]);
-                if (output1 != nullptr)output[i * dimx + j] =max(output[i * dimx + j], output1[cj * dimy + ci]);
-                if (output2 != nullptr)output[i * dimx + j] =max(output[i * dimx + j], output2[j * dimy + ci]);
-                if (output3 != nullptr)output[i * dimx + j] =max(output[i * dimx + j], output3[i * dimx + cj]);
+                if (output0 != nullptr)output[i * dimx + j] =MAX(output[i * dimx + j], output0[i * dimx + j]);
+                if (output1 != nullptr)output[i * dimx + j] =MAX(output[i * dimx + j], output1[cj * dimy + ci]);
+                if (output2 != nullptr)output[i * dimx + j] =MAX(output[i * dimx + j], output2[j * dimy + ci]);
+                if (output3 != nullptr)output[i * dimx + j] =MAX(output[i * dimx + j], output3[i * dimx + cj]);
             }
         }
         break;

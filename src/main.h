@@ -1,21 +1,69 @@
 //
 // Created by Felipe on 11-12-22.
 //
-#include <cstdio>
-#include <iostream>
-#include <string>
-#include <complex>
-#include <valarray>
 
-#include "auxf.h"  //<< global.f << defaults.h
-#include "auxf.cuh"
-#include "Lodepng.h"
-#include "drawing.h"
+/**
+ * @file main.h
+ * @author Felipe Romero
+ * @brief Sólo simplifica el ejecutable main
+ */
+
+// 0 Skew DEM
+// 1 Skew blur (max)
+// 2 DEM identity (Divide by 180
+// 3 Image identity (Divide by 3, and by 180
+// 4 Skew blur
 
 
 
+/**
+ * Switch para configurar la ejecución de cada uno de los kernels
+ * @param argc
+ * @param argv
+ * @param filename
+ */
+void configure(int argc, char *argv[], char * filename=NULL) {
+    char fn[100];
+    if(filename!=NULL)strcpy(fn,filename);
+    switch(skewAlgorithm)
+    {
+        case 0:
+            if(filename==NULL)strcpy(fn,"4070000_0310000_010.bil");
+            dimx=dimy=2000;
+            N = dim = dimx * dimy;
+            configureSDEM(fn);
+            break;
+        case 1:
+            if(filename==NULL)strcpy(fn,"blurred1.png");
+            configureRADN(fn);
+            break;
+        case 2:
+            if(filename==NULL)strcpy(fn,"4070000_0310000_010.bil");
+            dimx=dimy=2000;
+            N = dim = dimx * dimy;            configureSDEM(filename);
+            configureSDEM(fn);
+            break;
+        case 3:
+            if(filename==NULL)strcpy(fn,"blurred1.png");
+            configureRADN(fn);
+            break;
+        case 4:
+            if(filename==NULL)strcpy(fn,"blurred1.png");
+            configureRADN(fn);
+            break;
+        default:
+            if(filename==NULL)strcpy(fn,"blurred1.png");
+            configureRADN(fn);
+            break;
+    }
+}
 
-// Set n threads, n gpus
+/**
+ * Initially set n threads to ncores and n gpus to available gpus
+ * @param dimx
+ * @param dimy
+ * @param runMode
+ */
 void setResources(int dimx,int dimy, int runMode=0)
 {
     cpu = new CpuInterfaceV3(dimy, dimx);
@@ -23,6 +71,7 @@ void setResources(int dimx,int dimy, int runMode=0)
     nGPUs = 0;
     gpuV3->GetNumberGPUs(nGPUs);
     nCPUs=omp_get_num_procs();
+    if(runMode==0)nGPUs=0;
     if(nthreads==-1)
     {
         nthreads=nCPUs;
@@ -30,7 +79,7 @@ void setResources(int dimx,int dimy, int runMode=0)
         printf("Now, nthreads set to %d\n",nthreads);
     }
     if(runMode==1)nthreads=nGPUs;
-    //What happens in runmode 2?
+    //What happens in runmode 2? Not set
     omp_set_num_threads(nthreads);
     if(verbose) {
         printf("%d CPUs and %d GPUs found. nthreads set to %d\n", nCPUs, nGPUs, nthreads);
@@ -39,79 +88,28 @@ void setResources(int dimx,int dimy, int runMode=0)
 
 }
 
-template <typename T>
-void readData(char *inputfilename, T *&inputData)
-{
-    //Uncomment for a simple,non-square input test:
-    dimy=1980;dimx=1920;dim=dimx*dimy;
-
-    FILE *f;
-    f = fopen(inputfilename, "rb");
-    if (f == NULL) {
-        printf("Error opening %s\n", inputfilename);
-    }
-    else {
-        for (int i = 0; i < dimy; i++) {
-            for (int j = 0; j < dimx; j++) {
-                short num;
-                fread(&num, 2, 1, f);
-                inputData[dimx * i + j] = ((T) num) / 10.0; //internal representation from top to bottom (inner loop)
-            }
-            //simple non-square input test:
-            fseek(f, 2*(2000-dimx), SEEK_CUR);
-        }
-        fclose(f);
-        pair_t mm= getMinMax(inputData);
-        printf("Input model readed, with extreme values (/step): %5.1f - %6.1f\n",mm.min*step,mm.max*step);
-    }
-}
-
-void configureSDEM(char *filename)
-{
-    inputD=h_DEM = new float[dim];
-    readData(filename, inputD);
-    surScale=M_PI/(360*step*step);
-    POVh=obsheight/step;
-    if(verbose) {
-        printf("Allocating DEM (from %s, with filesize: %dx%d and step %f) and setting observer's height to %f\n", filename, dimx, dimy,step,obsheight);
-    }
-}
-
-void configureBLUR(char *filename) {
-    read_png(filename,pixels,imgWidth,imgHeight);
-    dimx=imgWidth;
-    dimy=imgHeight;
-    dim=N=dimx*dimy;
-    inputD=new float[dim];
-    for(int i=0;i<dim;i++)inputD[i]=pixels[i];
-}
+/**
+ * Ejecución del skewEngine
+ * @param skewAlgorithm Algoritmo que se implementa (totalviewshed, transformada radon, identidades, ...)
+ */
+void execute(int skewAlgorithm=0);
 
 
-int skewAlgorithm=0;
-void configureV3(int argc, char *argv[], char * filename) {
-    switch(skewAlgorithm)
-    {
-        case 0:
-            check_args_v2(argc,argv);
-            configureSDEM(filename);
-            break;
-        case 1:
-            configureBLUR(filename);
-            break;
-        case 2:
-            check_args_v2(argc,argv);
-            configureSDEM(filename);
-            break;
-        case 3:
-            configureBLUR(filename);
-            break;
-        case 4:
-            configureBLUR(filename);
-            break;
-        default:
-            check_args_v2(argc,argv);
-            configureSDEM(filename);
-            break;
-    }
+
+void showResults(int skewAlgorithm) {
+    pair_t mm = getMinMax(outD);
+    float escala = 1.0 / 180;
+    if (skewAlgorithm == 0)escala = surScale; //scales to hectometers
+    if (skewAlgorithm == 1)escala = 1;//1.0/180;  //cepstrum
+    if (skewAlgorithm == 3)escala = 1.0 / 540; //identity blur
+
+    printf("Extreme values for output: %6.2f - %e  (scale = %f )\n ", (mm.min * escala), mm.max * escala, escala);
+    fflush(stdout);
+
+    if(skewAlgorithm==0)showResultsSDEM();
+    if(skewAlgorithm==1)showResultsRADN();
+    if(skewAlgorithm==3)showResultsRADN();
+
+
 
 }

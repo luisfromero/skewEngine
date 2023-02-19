@@ -1,4 +1,4 @@
-#include "GpuSolver.cuh"
+#include "gpuSolver.cuh"
 
 #if defined(WIN32)
 #define WINPAUSE system("pause")

@@ -32,9 +32,9 @@ Este sería un ejemplo de problema computacionalmente intratable (salvo para map
 
 <br>
 
-### Algoritmo de Romero, *et al*
+### Algoritmo de Romero et al
 
-En 2012, Romero *et al* [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). Es decir, para cada sector angular de un grado, sólo tiene en cuenta los puntos en el eje central del sector.
+En 2012, Romero _et al_ [publican](https://www.ac.uma.es/~siham/visibility-2012.pdf) un algoritmo que considera dicha dependencia radial calculando la cuenca visual, para todos los puntos, en un conjunto discreto de direcciones (360, normalmente). Es decir, para cada sector angular de un grado, sólo tiene en cuenta los puntos en el eje central del sector.
 
 <pre>
 for pov in 1,N

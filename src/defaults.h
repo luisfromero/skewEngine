@@ -7,7 +7,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <math.h>
-#include "Lodepng.h"
+#include "third-party/Lodepng.h"
 //#include <string>
 #define WINPAUSE system("pause")
 
@@ -29,23 +29,10 @@
 
 // obs_h=10;       observer's height in meters
 #define OBS_H 1.5
-
-//T fila es i%dimy
-//T colu es i/dimy
-#define T2N(i) ((dimy * ((i) % dimy)) + ((i) / dimy))
-
-//N fila es i/dimx
-//N colu es i%dimx
 #define N2T(i) ((dimx * ((i) % dimx)) + ((i) / dimx))
 
 
 
 const double PI = M_PI;
-const double mpi = M_PI / 2;
-const double tmpi = 3 * M_PI / 2;
-const double tograd = 360 / (2 * M_PI); // conver const of radians to degree
-const double torad = (2 * M_PI) / 360;  // conver const of degree to radians
-const float PI_F = 3.14159265358979f;
-const int isolationindex = 2; // 0 max 1 m_arit 2 m_harm 3 m_geom
 
 #endif

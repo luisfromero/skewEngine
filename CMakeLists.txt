@@ -3,8 +3,8 @@ project(skewEngine CUDA CXX)
 
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}")
 
-set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(OMPFLAG "-fopenmp")
 set(MYCXXFLAGS "${OMPFLAG} -DGENERIC")
@@ -18,8 +18,8 @@ if (${HOST} STREQUAL "cactus")
     set(MYCUDAFLAGS "${OMPFLAG},-DCACTUS")
     set(CMAKE_CUDA_ARCHITECTURES "86")
     set(CMAKE_CUDA_COMPILER  "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.6\\bin\\nvcc.exe")
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "D:\\onedrive\\proyectos\\skewEngine")
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "D:\\onedrive\\proyectos\\skewEngine")
+    #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "D:\\")
+    #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "D:\\onedrive\\proyectos\\skewEngine")
 endif()
 
 if (${HOST} STREQUAL "aloe")
@@ -39,42 +39,47 @@ set(ENV{CUDACXX}  "${CMAKE_CUDA_COMPILER}")
 
 
 set (HEADERS
-        main.h
-        GpuSolver.cuh
-        defaults.h
-        Constants.h
-        Global.h
-        Lodepng.h
-        color.h
-        mainPath.h
-        drawing.h
-        auxf.h
-        auxf.cuh
-        skewEngine.cuh
+        src/main.h
+        src/mainV3.h
+        src/kernelRADN/kernelRADN.h
+        src/kernelSDEM/kernelSDEM.h
+        src/kernelUNIT/kernelUNIT.h
+        src/gpuSolver.cuh
+        src/defaults.h
+        src/global.h
+        src/color.h
+        src/auxf.h
+        src/auxf.cuh
+        src/skewEngine.cuh
         )
 
 set (SOURCES
         src/main.cu
-        src/GpuSolver.cu
-        src/Global.cpp
+        src/gpuSolver.cu
+        src/global.cpp
         src/third-party/Lodepng.cpp
         src/color.cpp
-        src/drawing.cpp
         src/auxf.cpp
         src/auxf.cu
         src/skewEngine.cu
-#        ${HEADERS}
+        ${HEADERS}
         )
 
 find_package(OpenMP)
-include_directories(SYSTEM ./src)
+#include_directories(SYSTEM ./src)
 add_executable(skewEngine ${SOURCES})
+add_library(sk_engine SHARED ${SOURCES})
 target_include_directories(skewEngine
         PRIVATE
         ${PROJECT_SOURCE_DIR}/src
-        ${PROJECT_SOURCE_DIR}/src/third-party
+        ${PROJECT_SOURCE_DIR}/src/
+        third-party
         )
 
+if (NOT ${HOST} STREQUAL "cactus")
+    target_link_libraries(skewEngine stdc++fs)
+    target_link_libraries(sk_engine stdc++fs)
+endif()
 
 
 
@@ -86,3 +91,4 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} ${MYCXXFLAGS}")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
+

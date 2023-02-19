@@ -121,6 +121,7 @@ void read_png(const std::string filename, std::vector<short> &pixels, unsigned &
     std::vector<unsigned char> image;
 
     // Lee el archivo PNG
+
     unsigned error = lodepng::decode(image, imgWidth, imgHeight, filename);
     if (error) {
         throw std::runtime_error(lodepng_error_text(error));

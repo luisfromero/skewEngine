@@ -5,7 +5,7 @@
 #ifndef SKE_COLOR_H
 #define SKE_COLOR_H
 
-#include "Global.h"
+#include "global.h"
 
 color * build_palette();
 rgbColor HSVtoRGB(hsvColor hsv);

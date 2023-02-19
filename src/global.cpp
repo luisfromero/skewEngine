@@ -1,4 +1,4 @@
-#include "Global.h"
+#include "global.h"
 
 std::chrono::time_point<std::chrono::high_resolution_clock> startCPU, startCPU2, startGPU, endCPU, endCPU2, endGPU;
 std::chrono::duration<double, std::nano> elapsed = std::chrono::nanoseconds::zero();

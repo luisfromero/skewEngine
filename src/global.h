@@ -4,7 +4,7 @@
 #include <string>
 #include <chrono>
 #include "skewEngine.cuh"
-#include "GpuSolver.cuh"
+#include "gpuSolver.cuh"
 #include "defaults.h"
 #ifdef _OPENMP
 #define OPENMP
@@ -49,7 +49,7 @@ typedef struct {
 
 #endif
 
-#include "color.h"
+//#include "color.h"
 #include "auxf.cuh"
 
 

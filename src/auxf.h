@@ -5,7 +5,7 @@
 #ifndef TVSSDEM_AUX_H
 #define TVSSDEM_AUX_H
 
-#include "Global.h"
+#include "global.h"
 
 char * str_upr(char *s);
 bool exists(const char * filename);
