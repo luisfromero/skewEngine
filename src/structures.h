@@ -1,0 +1,8 @@
+//
+// Created by Felipe on 19-2-23.
+//
+
+#ifndef SKEWENGINE_STRUCTURES_H
+#define SKEWENGINE_STRUCTURES_H
+
+#endif //SKEWENGINE_STRUCTURES_H
