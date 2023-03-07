@@ -1,7 +1,7 @@
 /**
- * @file kernelSDEM.h
+ * @file kernelUNIT.h
  * @author Felipe Romero
- * @brief Funciones específicas del kernel unitario
+ * @brief Funciones específicas para el módulo con el kernel Identity
  *
  * Modelo para otros kernel
  */
@@ -38,6 +38,7 @@ void identityCuda(float *d_skewOutput, float *d_skewInput, int dim_i, int skewHe
 
 void showResultsUNIT()
 {
+    //Aquí deberíamos calcular el porcentaje de diferencias debido a la interpolación y extrapolación
 }
 
 #endif

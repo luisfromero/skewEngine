@@ -380,6 +380,30 @@ Cuando una CPU o GPU termina de procesar los sectores que le han sido asignado, 
 
 El archivo [skewEngine.MD](skewEngine.MD) muestra cómo quedaría la clase skewEngine.
 
+---
+## Caso de estudio: Transformada Radon
+
+ la transformada de Radon es una herramienta matemática utilizada en radiología para la reconstrucción de imágenes de objetos a partir de mediciones de rayos X o de otras formas de radiación. La transformada de Radon mide la cantidad de radiación que atraviesa el objeto desde todas las direcciones posibles y convierte esta información en una imagen bidimensional o tridimensional del objeto. Este proceso se llama tomografía y se utiliza comúnmente en la medicina para visualizar estructuras internas del cuerpo humano y en otras áreas de la ciencia para la inspección de materiales y la investigación de la naturaleza.
+
+ La transformada Radon se define como la integral de la imagen a lo largo de todas las rectas que pasan por un punto fijo del espacio. En otras palabras, para cada dirección, se mide la cantidad de radiación que atraviesa el objeto a lo largo de esa dirección y se integra esta información a lo largo de todas las rectas de esa dirección.
+
+El resultado de la transformada de Radon es una función que representa la suma de las proyecciones a lo largo de cada dirección posible. Esta función se llama sinograma y se utiliza como entrada para la reconstrucción de la imagen. La reconstrucción se realiza mediante una técnica llamada retroproyección filtrada, que consiste en tomar cada proyección del sinograma, rotarla y luego "proyectarla hacia atrás" a lo largo de la dirección correspondiente en el espacio. El resultado de este proceso para todas las direcciones se suma para producir la imagen final del objeto.
+
+La Transformada Radon Local (LRT, por sus siglas en inglés) es una variante de la Transformada de Radon que se utiliza para analizar imágenes en dominios locales y no globales. A diferencia de la transformada de Radon estándar, que utiliza la información de la proyección de la imagen en todas las direcciones posibles, la LRT utiliza una ventana de análisis local en la imagen para calcular la transformada de Radon.
+
+En otras palabras, la LRT descompone la imagen en regiones locales y calcula la transformada de Radon para cada región. Esto permite analizar la imagen de forma más detallada y adaptativa a las características locales de la imagen.
+
+La LRT tiene varias aplicaciones, como el análisis de texturas en imágenes, la detección de bordes y la segmentación de imágenes. También se utiliza en campos como la inspección no destructiva de materiales, la visualización médica y la astronomía.
+
+La Transformada Radon Local (LRT) puede tener un alto costo computacional en comparación con la transformada de Radon estándar. Esto se debe a que la LRT requiere el cálculo de la transformada de Radon para cada ventana local en la imagen, lo que puede ser computacionalmente intensivo., por lo que SkewEngine se presenta como la herramienta más adecuada para la segmentación de datos procedentes de tomografía, radioatronomía, etc. 
+
+En este trabajo se ha calculado la transformada Radon local a todos los puntos de una imagen en apenas unos segundos.
+
+** Los resultados aún no los hemos intepretado **
+
+
+
+
 <br>
 
 ---

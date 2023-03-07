@@ -14,28 +14,33 @@
 
 #ifndef SKEWENGINE_H
 #define SKEWENGINE_H
-
-// Still not implemented error checks
-
-#define CUDA_ERROR_CHECK
-#define CudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
-#define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
-
 #include <cmath>
 #include <algorithm>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <iostream>
 
 #define _USE_MATH_DEFINES
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
-
-
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 
 
+// ToDo error checks
+
+#ifdef _WIN32
+#include <cuda_runtime.h>
+#include <device_launch_parameters.h>
+#else
+#endif
+#define cudaHostAllocPortable 0x01
+
+
 
 #if defined(__CUDACC__)
+
 
 template <typename T>
 __global__
@@ -162,8 +167,11 @@ public:
     void deskew(int isMax=0);
     void reduce(T **output);
     void reduce(T *output, int isMax=0);
+
     static inputData<T> prepare(T *inputD, int dimx, int dimy);
     static inputData<T> prepare( inputData<T> *input, int dimx, int dimy);
+    static void allocate(inputData<T> &inData,T* inputD,T** outD,int dimx, int dimy);
+    static void deallocate(inputData<T> inData,T* inputD,T* outD);
     void kernel();
 
 
@@ -211,6 +219,52 @@ public:
     void (*kernelgpu)(T *d_skewOutput,T *d_skewInput,int dim_i,int skewHeight,unsigned short *d_first,unsigned short *d_last, T val, int angle);
     void (*kernelcpu)(skewEngine<T> *);
 };
+
+/*
+ * Static
+ */
+template<typename T>
+void skewEngine<T>::deallocate(inputData<T> inData,T* inputD,T* outD) {
+    cudaFreeHost(inData.input0) ;
+    cudaFreeHost(inData.input1) ;
+    cudaFreeHost(inData.input2) ;
+    cudaFreeHost(inData.input3) ;
+    free(outD);
+    free(inputD);
+}
+
+template<typename T>
+void skewEngine<T>::allocate(inputData<T> &inData,T* inputD,T** outD,int dimx, int dimy)
+{
+
+    // AllocDEMHost (in auxf.cu) allocate arrays in CPU in a better way than malloc, if it's going to be
+    // used in CUDA  ("pinned" memory)
+
+    //
+    int dim=dimx*dimy;
+    int dataSize=sizeof(T);
+
+    //cpu->AllocDEMHost(inData.input0,inData.input1,inData.input2,inData.input3,dim);
+    cudaHostAlloc(&inData.input0, dim* sizeof(*inData.input0), cudaHostAllocPortable) ;
+    cudaHostAlloc(&inData.input1, dim* sizeof(*inData.input1), cudaHostAllocPortable) ;
+    cudaHostAlloc(&inData.input2, dim* sizeof(*inData.input2), cudaHostAllocPortable) ;
+    cudaHostAlloc(&inData.input3, dim* sizeof(*inData.input3), cudaHostAllocPortable) ;
+
+    memcpy(inData.input0,inputD,dim*dataSize); //Move input data to pinned memory
+
+    *outD=(T *)malloc(dim*sizeof (T));
+    memset(*outD,0,dim*dataSize);
+    // Cambiar, si no es sdem ni blur
+    inData=  skewEngine<float>::prepare(&inData,dimx,dimy);// Rotated and mirror
+}
+
+
+
+
+
+
+
+
 
 
 // dimx, dimy, input has been initiated with arguments values
@@ -423,7 +477,10 @@ template<typename T>
 void skewEngine<T>::deskew(int isMax){
     // https://stackoverflow.com/questions/7546620/operator-new-initializes-memory-to-zero
     // Un thread crea la estructura sólo si la va a necesitar
-    if(sectorType==0&&output0== nullptr){output0=(T *)malloc(N*sizeof(T));memset((void *)output0,0,N* sizeof(T));}
+    if(sectorType==0&&output0== nullptr){
+        output0=(T *)malloc(N*sizeof(T));
+        memset((void *)output0,0,N* sizeof(T));
+    }
     if(sectorType==1&&output1== nullptr){output1=(T *)malloc(N*sizeof(T));memset((void *)output1,0,N* sizeof(T));}
     if(sectorType==2&&output2== nullptr){output2=(T *)malloc(N*sizeof(T));memset((void *)output2,0,N* sizeof(T));}
     if(sectorType==3&&output3== nullptr){output3=(T *)malloc(N*sizeof(T));memset((void *)output3,0,N* sizeof(T));}
@@ -611,9 +668,7 @@ inputData<T> skewEngine<T>::prepare( inputData<T> *input , int dimx, int dimy) {
     result.input1=input1;
     result.input2=input2;
     result.input3=input3;
-
     return result;
-
 }
 
 

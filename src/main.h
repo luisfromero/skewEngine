@@ -9,10 +9,11 @@
  */
 
 // 0 Skew DEM
-// 1 Skew blur (max)
-// 2 DEM identity (Divide by 180
+// 1 DEM identity (Divide by 180
+// 2 Radon
 // 3 Image identity (Divide by 3, and by 180
-// 4 Skew blur
+// 4 Skew blur ToDo
+
 
 
 
@@ -34,20 +35,16 @@ void configure(int argc, char *argv[], char * filename=NULL) {
             configureSDEM(fn);
             break;
         case 1:
-            if(filename==NULL)strcpy(fn,"blurred1.png");
-            configureRADN(fn);
-            break;
-        case 2:
             if(filename==NULL)strcpy(fn,"4070000_0310000_010.bil");
             dimx=dimy=2000;
-            N = dim = dimx * dimy;            configureSDEM(filename);
+            N = dim = dimx * dimy;
             configureSDEM(fn);
             break;
-        case 3:
+        case 2:
             if(filename==NULL)strcpy(fn,"blurred1.png");
             configureRADN(fn);
             break;
-        case 4:
+        case 3:
             if(filename==NULL)strcpy(fn,"blurred1.png");
             configureRADN(fn);
             break;
@@ -66,10 +63,10 @@ void configure(int argc, char *argv[], char * filename=NULL) {
  */
 void setResources(int dimx,int dimy, int runMode=0)
 {
-    cpu = new CpuInterfaceV3(dimy, dimx);
-    gpuV3 = new GpuInterfaceV3(dimy, dimx);
     nGPUs = 0;
-    gpuV3->GetNumberGPUs(nGPUs);
+    cudaGetDeviceCount(&nGPUs);
+
+
     nCPUs=omp_get_num_procs();
     if(runMode==0)nGPUs=0;
     if(nthreads==-1)
@@ -95,21 +92,25 @@ void setResources(int dimx,int dimy, int runMode=0)
 void execute(int skewAlgorithm=0);
 
 
-
+/**
+ * Switch que selecciona la forma de mostrar los resultados, dependiendo del kernel
+ * @param skewAlgorithm
+ */
 void showResults(int skewAlgorithm) {
-    pair_t mm = getMinMax(outD);
+    pair_t mm = helper::getMinMax(outD);
     float escala = 1.0 / 180;
-    if (skewAlgorithm == 0)escala = surScale; //scales to hectometers
-    if (skewAlgorithm == 1)escala = 1;//1.0/180;  //cepstrum
+    float autoScale = 255/(mm.max-mm.min);
+    if (skewAlgorithm == 0)escala = M_PI/(360*10*10); //scales to hectometers
+    if (skewAlgorithm == 1)escala = 1/180.0; //scales to max
+    if (skewAlgorithm == 2)escala = autoScale;//1.0/180;  //radon
     if (skewAlgorithm == 3)escala = 1.0 / 540; //identity blur
 
     printf("Extreme values for output: %6.2f - %e  (scale = %f )\n ", (mm.min * escala), mm.max * escala, escala);
     fflush(stdout);
 
     if(skewAlgorithm==0)showResultsSDEM();
-    if(skewAlgorithm==1)showResultsRADN();
-    if(skewAlgorithm==3)showResultsRADN();
-
-
+    if(skewAlgorithm==1)showResultsSDEM();
+    if(skewAlgorithm==2)showResultsRADN(escala,mm.min);
+    if(skewAlgorithm==3)showResultsRADN(escala);
 
 }

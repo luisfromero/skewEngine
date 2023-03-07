@@ -8,7 +8,35 @@
 #define KCEP_H
 #include "../color.h"
 
-const int windowSize=256; // Tamaño de la ventana Hahn para la fft
+
+#ifndef KERNELCOMMONS
+#define KERNELCOMMONS
+
+const int winSize=128; // Radio de la ventana
+
+int isSamplePoint(int x , int y)
+{
+    if(saveSampleData)
+        for(int i=0;i<samplePoints.size();i++)
+            if(samplePoints[i].x==x&&samplePoints[i].y==y)return i;
+    return -1;
+}
+
+void allocSampleData(int sector)
+{
+    for(int i=0;i<samplePoints.size();i++)
+    {
+        std::vector<float> v1(winSize);
+        sampleData1[sector].push_back(v1);
+        std::vector<float> v2(winSize/2);
+        sampleData2[sector].push_back(v2);
+        std::vector<float> v3(winSize/4);
+        sampleData3[sector].push_back(v3);
+    }
+}
+
+#endif
+
 
 
 
@@ -137,18 +165,18 @@ float lineCepstrum(int j, float *linePtr,int first, int last, int x, int y, int 
         }
     }
     //if (last-first < windowSize)return 0;
-    std::complex<double> input1[windowSize];
-    select_subarray(linePtr, input1, first, last, j, windowSize,scale);
-    CArray data1(input1, windowSize);
+    std::complex<double> input1[winSize];
+    select_subarray(linePtr, input1, first, last, j, winSize,scale);
+    CArray data1(input1, winSize);
     if(found)
     {
-        for (int k = 0; k < windowSize ; k++) sampleData1[angle][idxTrack][k]=((float)input1[k].real());
+        for (int k = 0; k < winSize ; k++) sampleData1[angle][idxTrack][k]=((float)input1[k].real());
     }
     helper::fft(data1,true);
     float integral=0;
-    int L=windowSize/2;
-    std::complex<double> input2[windowSize];
-    for (int k = 0; k < windowSize/2 ; k++){
+    int L=winSize/2;
+    std::complex<double> input2[winSize];
+    for (int k = 0; k < winSize/2 ; k++){
         double PS,logPS;
         PS=((pow(data1[k].real(), 2) + pow(data1[k].imag(), 2)));
         //PS=norm(data1[k]);
@@ -158,45 +186,45 @@ float lineCepstrum(int j, float *linePtr,int first, int last, int x, int y, int 
     }
     if(found)
     {
-        for (int k = 0; k < windowSize/2 ; k++) sampleData2[angle][idxTrack][k]=((float)input2[k].real());
+        for (int k = 0; k < winSize/2 ; k++) sampleData2[angle][idxTrack][k]=((float)input2[k].real());
     }
-    CArray data2( input2, windowSize/2);
+    CArray data2( input2, winSize/2);
     helper::fft(data2,true);
-    double samples[windowSize/4];
-    for (int k = 0; k < windowSize/4 ; k++)
+    double samples[winSize/4];
+    for (int k = 0; k < winSize/4 ; k++)
     {
         samples[k] =-std::min(0.0,data2[k].real());
     }
     double result_val;
-    getBlurParameter2(samples, windowSize/4, result, result_val);
+    getBlurParameter2(samples, winSize/4, result, result_val);
     integral=0;
-    for (int k = 0; k < windowSize/4 ; k++)integral+=samples[k];
+    for (int k = 0; k < winSize/4 ; k++)integral+=samples[k];
     if(found)
     {
-        for (int k = 0; k < windowSize/4 ; k++) sampleData3[angle][idxTrack][k]=((float)(data2[k].real()));
+        for (int k = 0; k < winSize/4 ; k++) sampleData3[angle][idxTrack][k]=((float)(data2[k].real()));
     }
     //Draw cepstrum curves
     /*
     if(false) {
         if (i == 567 && j == 1066)
-            for (int k = 0; k < windowSize / 4; k++) {
+            for (int k = 0; k < winSize / 4; k++) {
                 int y = std::max(0, (int) (30 - samples[k] / 1000));
                 pointImgs[sector][y * 132 + 01 + k] = 0;
             }
         if (i == 138 && j == 357)
-            for (int k = 0; k < windowSize / 4; k++) {
+            for (int k = 0; k < winSize / 4; k++) {
                 int y = std::max(0, (int) (30 - samples[k] / 1000));
                 pointImgs[sector][y * 132 + 67 + k] = 0;
             }
     }
      */
-    //if(result_val<2||result==0 || result == windowSize/4)return 0;
+    //if(result_val<2||result==0 || result == winSize/4)return 0;
     //float x=samples[result]-(samples[result-1]+samples[result+1])/2;
     //return integral/(scale*10);
     return result_val*10000;
     //if(result_val<2)result=0;
     //return result*3000;
-    //result=  first_local_max(samples, windowSize/4, result_val);
+    //result=  first_local_max(samples, winSize/4, result_val);
 }
 
 
@@ -207,25 +235,25 @@ float cepstrum_i(int i,int j, float *lineFirst,int length, fftw_plan p1, fftw_pl
     //fftw_make_planner_thread_safe();
     int result;
     try {
-        //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (windowSize));
-        //double samples[windowSize];
+        //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (winSize));
+        //double samples[winSize];
         //fftw_plan p1,p2;
 
-        if (length < windowSize)return 0;
-        select_subarray(lineFirst, samples, length, j, windowSize);
-        //p1 = fftw_plan_dft_r2c_1d(windowSize, samples, out, FFTW_ESTIMATE);
+        if (length < winSize)return 0;
+        select_subarray(lineFirst, samples, length, j, winSize);
+        //p1 = fftw_plan_dft_r2c_1d(winSize, samples, out, FFTW_ESTIMATE);
         //if(p1==NULL)return 0;        else
             fftw_execute(p1);
-        for (int k = 0; k < windowSize / 2 + 1; k++)samples[k] = log((pow(out[k][0], 2) + pow(out[k][1], 2)));
-        //p2 = fftw_plan_dft_r2c_1d(windowSize / 2 + 1, samples, out, FFTW_ESTIMATE);
+        for (int k = 0; k < winSize / 2 + 1; k++)samples[k] = log((pow(out[k][0], 2) + pow(out[k][1], 2)));
+        //p2 = fftw_plan_dft_r2c_1d(winSize / 2 + 1, samples, out, FFTW_ESTIMATE);
         //if(p2==NULL)return 0;         else
             fftw_execute(p2);
-        for (int k = 0; k < (windowSize / 2 + 1) / 2 + 1; k++)samples[k] = (pow(out[k][0], 2) + pow(out[k][1], 2));
+        for (int k = 0; k < (winSize / 2 + 1) / 2 + 1; k++)samples[k] = (pow(out[k][0], 2) + pow(out[k][1], 2));
         //fftw_free(out);
         //fftw_destroy_plan(p1);
         //fftw_destroy_plan(p2);
         double v;
-        result=  first_local_max(samples, (windowSize/2+1)/2+1,v);
+        result=  first_local_max(samples, (winSize/2+1)/2+1,v);
     }catch(std::exception e)
     {
         return 0;
@@ -238,14 +266,14 @@ float cepstrum_i(int i,int j, float *lineFirst,int length, fftw_plan p1, fftw_pl
 
 void cepstrum(skewEngine<float> *skewEngine)
 {
-    //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (windowSize));
-    //double samples[windowSize];
+    //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (winSize));
+    //double samples[winSize];
     //fftw_make_planner_thread_safe();
-    //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (windowSize));
-    //double samples[windowSize];
+    //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (winSize));
+    //double samples[winSize];
     //fftw_plan p1,p2;
-    //p1 = fftw_plan_dft_r2c_1d(windowSize, samples, out, FFTW_ESTIMATE);
-    //p2 = fftw_plan_dft_r2c_1d(windowSize / 2 + 1, samples, out, FFTW_ESTIMATE);
+    //p1 = fftw_plan_dft_r2c_1d(winSize, samples, out, FFTW_ESTIMATE);
+    //p2 = fftw_plan_dft_r2c_1d(winSize / 2 + 1, samples, out, FFTW_ESTIMATE);
 
     int q=skewEngine->sectorType;
     bool tr,rx,ry;
@@ -288,20 +316,20 @@ void showResultsCEPS()
     std::ofstream punto3c("punto3c.txt");
 
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
-            punto1i << sampleData1[i][0][windowSize/2+j] << " ";
-            punto2i << sampleData1[i][1][windowSize/2+j] << " ";
-            punto3i << sampleData1[i][2][windowSize/2+j] << " ";
+        for (int j = 0; j < winSize/2; j++) {
+            punto1i << sampleData1[i][0][winSize/2+j] << " ";
+            punto2i << sampleData1[i][1][winSize/2+j] << " ";
+            punto3i << sampleData1[i][2][winSize/2+j] << " ";
         }
         punto1i << std::endl;
         punto2i << std::endl;
         punto3i << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
-            punto1i << sampleData1[i][0][windowSize/2-1-j] << " ";
-            punto2i << sampleData1[i][1][windowSize/2-1-j] << " ";
-            punto3i << sampleData1[i][2][windowSize/2-1-j] << " ";
+        for (int j = 0; j < winSize/2; j++) {
+            punto1i << sampleData1[i][0][winSize/2-1-j] << " ";
+            punto2i << sampleData1[i][1][winSize/2-1-j] << " ";
+            punto3i << sampleData1[i][2][winSize/2-1-j] << " ";
         }
         punto1i << std::endl;
         punto2i << std::endl;
@@ -310,7 +338,7 @@ void showResultsCEPS()
 
     // Escribir segundo bloque en punto1_k1.txt
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
+        for (int j = 0; j < winSize/2; j++) {
             punto1l << sampleData2[i][0][j] << " ";
             punto2l << sampleData2[i][1][j] << " ";
             punto3l << sampleData2[i][2][j] << " ";
@@ -320,7 +348,7 @@ void showResultsCEPS()
         punto3l << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
+        for (int j = 0; j < winSize/2; j++) {
             punto1l << sampleData2[i][0][j] << " ";
             punto2l << sampleData2[i][1][j] << " ";
             punto3l << sampleData2[i][2][j] << " ";
@@ -332,7 +360,7 @@ void showResultsCEPS()
 
     // Escribir tercer bloque en punto2_k2.txt
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/4; j++) {
+        for (int j = 0; j < winSize/4; j++) {
             punto1c << sampleData3[i][0][j] << " ";
             punto2c << sampleData3[i][1][j] << " ";
             punto3c << sampleData3[i][2][j] << " ";
@@ -342,7 +370,7 @@ void showResultsCEPS()
         punto3c << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/4; j++) {
+        for (int j = 0; j < winSize/4; j++) {
             punto1c << sampleData3[i][0][j] << " ";
             punto2c << sampleData3[i][1][j] << " ";
             punto3c << sampleData3[i][2][j] << " ";

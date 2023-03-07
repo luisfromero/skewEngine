@@ -7,42 +7,76 @@
 #ifndef KRND_H
 #define KRND_H
 #include "../color.h"
-const int windowSize=256;
-typedef std::complex<double> Complex;
-typedef std::valarray<Complex> CArray;
-int nPoints=3;
-const bool saveTrackData=true;
-//point_t punto1={3,4};
-//point_t punto2={103,104};
-//point_t punto3={223,224};
 
-point_t punto1={1082,562};
-point_t punto2={348,266};
-point_t punto3={600,536};
+#ifndef M_PI_2
+#define M_PI_2 (M_PI/2)
+#endif
 
-std::vector<point_t>  trackPoints;
-std::vector<std::vector<float>>  trackData1[180];
-std::vector<std::vector<float>>  trackData2[180];
-std::vector<std::vector<float>>  trackData3[180];
-void allocTrackData(int sector)
+#ifndef KERNELCOMMONS
+#define KERNELCOMMONS
+
+const int winSize=64; // Diámetro de la ventana
+
+/**
+ * Obtiene las coordenadas originales de un mapa sesgado
+ * @param i Row, in skewed map
+ * @param j Column, in skewed map
+ * @param q Quadrant
+ * @return Coordinates x and y in the original 2D data
+ */
+point_t getXY(int i, int j, skewEngine<float> *sk)
 {
-    for(int i=0;i<trackPoints.size();i++)
-    {
-        std::vector<float> v1(windowSize);
-        trackData1[sector].push_back(v1);
-        std::vector<float> v2(windowSize/2);
-        trackData2[sector].push_back(v2);
-        std::vector<float> v3(windowSize/4);
-        trackData3[sector].push_back(v3);
-    }
+    bool tr,rx,ry;
+    int q=sk->sectorType;
+    if(q==0){tr=false;rx=false;ry=false;};
+    if(q==1){tr=true;rx=true;ry=true;};
+    if(q==2){tr=true;rx=false;ry=true;};
+    if(q==3){tr=false;rx=true;ry=false;};
+    int y=!tr?i-sk->target[j]:j;
+    int x=!tr?j:i-sk->target[j];
+    x=rx?dimx-1-x:x;
+    y=ry?dimy-1-y:y;
+    return {x,y};
 }
 
 
+int isSamplePoint(int x , int y)
+{
+    if(saveSampleData)
+        for(int i=0;i<samplePoints.size();i++)
+            if(samplePoints[i].x==x&&samplePoints[i].y==y)return i;
+    return -1;
+}
+int isSamplePoint(point_t pt)
+{
+    return isSamplePoint(pt.x,pt.y);
+}
+
+void allocSampleData(int sector)
+{
+    for(int i=0;i<samplePoints.size();i++)
+    {
+        std::vector<float> v1(winSize);
+        sampleData1[sector].push_back(v1);
+        std::vector<float> v2(winSize);
+        sampleData2[sector].push_back(v2);
+        std::vector<float> v3(winSize);
+        sampleData3[sector].push_back(v3);
+    }
+}
+
+#endif
+
+
+/**
+ * Configuración específica para la transformada Radon
+ * @param filename Nombre del archivo de imagen, relativo a I_DIR, con extensión png incluida
+ */
 void configureRADN(char *filename) {
     char fn[100];
     strcpy(fn,I_DIR);
     strcat(fn,filename);
-    read_png(fn,pixels,imgWidth,imgHeight);
+    helper::read_png(fn,pixels,imgWidth,imgHeight);
     dimx=imgWidth;
     dimy=imgHeight;
     dim=N=dimx*dimy;
@@ -50,344 +84,121 @@ void configureRADN(char *filename) {
     for(int i=0;i<dim;i++)inputD[i]=pixels[i];
 }
 
-// Cooley-Tukey FFT (in-place, breadth-first, decimation-in-frequency)
-// Better optimized but less intuitive
-// !!! Warning : in some cases this code make result different from not optimased version above (need to fix bug)
-// The bug is now fixed @2017/05/30
-void fft(CArray &x, bool normalize=false)
-{
-    // DFT
-    unsigned int N = x.size(), k = N, n;
-    double thetaT = 3.14159265358979323846264338328L / N;
-    Complex phiT = Complex(cos(thetaT), -sin(thetaT)), T;
-    while (k > 1)
-    {
-        n = k;
-        k >>= 1;
-        phiT = phiT * phiT;
-        T = 1.0L;
-        for (unsigned int l = 0; l < k; l++)
-        {
-            for (unsigned int a = l; a < N; a += n)
-            {
-                unsigned int b = a + k;
-                Complex t = x[a] - x[b];
-                x[a] += x[b];
-                x[b] = t * T;
-            }
-            T *= phiT;
-        }
-    }
-    // Decimate
-    unsigned int m = (unsigned int)log2(N);
-    for (unsigned int a = 0; a < N; a++)
-    {
-        unsigned int b = a;
-        // Reverse bits
-        b = (((b & 0xaaaaaaaa) >> 1) | ((b & 0x55555555) << 1));
-        b = (((b & 0xcccccccc) >> 2) | ((b & 0x33333333) << 2));
-        b = (((b & 0xf0f0f0f0) >> 4) | ((b & 0x0f0f0f0f) << 4));
-        b = (((b & 0xff00ff00) >> 8) | ((b & 0x00ff00ff) << 8));
-        b = ((b >> 16) | (b << 16)) >> (32 - m);
-        if (b > a)
-        {
-            Complex t = x[a];
-            x[a] = x[b];
-            x[b] = t;
-        }
-    }
-    //// Normalize (This section make it not working correctly)
-    if(!normalize)return;
-    Complex f = 1.0 / sqrt(N);
-    for (unsigned int i = 0; i < N; i++)
-        x[i] *= f;
-}
 
 
-void select_subarray(float array[], double subarray[], int first, int last, int i, int winSize) {
-    int half = winSize / 2;
-    for (int j = 0; j < winSize; j++) {
-        int index = i - half + j;
-        if (index < first || index >= last) {
-            subarray[j] = 0;
-        } else {
-            subarray[j] = array[index];
-        }
-    }
-}
 
 /**
- * Select Subset of winSize data from row , centered at i
- * @param array Row of data
- * @param subarray Target storage
- * @param size Right limit
- * @param i
- * @param winSize Subset size
+ * This method is called for every point in every skewed mapping.
+ * @param i Row index in skewed mapping
+ * @param j Column index in skewed mapping
+ * @param sk A pointer to the skewEngine (thread private)
+ * @param x Row index in the original data
+ * @param y Column index in the original data
+ * @returns Computed value for this point
  */
-void select_subarray(float array[], Complex *subarray, int first, int last, int i, int winSize, float sigma=1) {
-    int half = winSize / 2;
-    double half1 = (winSize-1) / 2.0;
-    sigma= sigma*winSize / 20;
-    for (int j = 0; j < winSize; j++) {
-        int index = i - half + j;
-        if (index < first || index >= last) {
-            subarray[j] = {0,0};
-        } else {
-            float v=array[index];
-            double gauss = exp(-(j - half) * (j - half) / (2 * sigma * sigma));
-            double alpha = (j - half1 / half1);
-            double hahn=0.5 * (1.0 - cos(2.0*M_PI*alpha));
-            subarray[j] = {v*hahn,0};
-        }
+float lineRadon(int i,int j, skewEngine<float> * sk) {
+    /// Averiguamos si es un punto de interés. Devuelve -1 en caso contrario
+    int idxTrack=isSamplePoint(getXY(i,j,sk));
+
+    int w=sk->skewWidth;
+    int h=sk->skewHeight;
+    int w2=winSize/2;
+    double dws=winSize;
+    double dw2=w2;
+    double dw1 = (winSize-1);
+    double sigma= sigma*winSize / 20;
+    double cutoff=0.5;
+    /// Calculate Radon transform (ramp filtered)
+    std::complex<double> input1[winSize];
+    for(int k=i-w2;k<i+w2;k++) {  //Par. Punto i en posición w2 de input1
+        double accum=0;
+        int fi=sk->first[k];
+        int la=sk->last[k];
+        for (int l = j-w2; l <= j+w2; l++) //Impar. Centrado en j
+            accum += (k<0|| k>=h)?0:( (l<fi||l>=la)?0:sk->skewInput[k*w+l] );
+        int kk=k - (i-w2); //de 0 a wsize
+        double gauss = exp(-(j - w2) * (j - w2) / (2 * sigma * sigma));
+        double hahn=0.5 * (1.0 - cos(2.0*M_PI*(kk / dw1)));// 1-cos -> 0 a 2 a 0 ->
+        double ramp=1-abs((k-i)/dw2);
+        input1[k - (i-w2)]= {accum*ramp,0};
     }
-}
 
-//Absolute max
-void getBlurParameter2(double *v, int n, int &imax, double &val)
-{
-    val=0;
-    imax=0;
-    int i;
-    //Mientras sea descendiente, descartamos
-    for(i=5;i<n;i++)
-        if(v[i]>v[i-1])
-            break;
-    if(i==n)
-        return;
-    else
-    {val=v[i-1];imax=i++;}
+    /// FFT to Radon
+    CArray data1(input1, winSize);
+    helper::fft(data1,true);
+    std::complex<double> input2[winSize];
 
-    for(;i<n;i++)
-        if(v[i]>val){
-            val=v[i];
-            imax=i;
+    //Frecuencia 0 en k=0. En k=winSize, la frecuencia es la de muestreo
+    //Se aplica un filtro pasa-alta
+    for(int k=0;k<winSize;k++) {
+        // input2[k] = k<5?0:data1[k].real(); //Filtro pasa alta alo bruto -> borrosillo
+        // input2[k] = data1[k].real(); //No filtramos nada -> borroso
+        // input2[k] = sin((k/dw1) *M_PI_2)* data1[k].real(); //Shepp-Logan de 0 a 1 a ritmo de Pi
 
-        }
-    if(imax==0)
-        val=0;
-}
-
-//First max
-void getBlurParameter(double *v, int n, int &imin, double &val)
-{
-    val=0;
-    imin=0;
-    int i;
-    for(i=4;i<n-1;i++)
-        if(v[i]<0&&(v[i]<v[i+1])&&(v[i]<v[i-1]))
-        {
-            imin=i;
-            val=-v[i];
-        }
-}
-//First max
-void getBlurParameter3(double *v, int n, int &imax, double &val)
-{
-    val=0;
-    imax=0;
-    int i;
-    //Mientras sea descendiente, descartamos
-    for(i=4;i<n;i++)
-        if(v[i]>v[i-1])
-            break;
-    if(i==n)
-        return;
-    else
-    {val=v[i-1];imax=i++;}
-
-    for(;i<n-1;i++)
-        if(v[i]>v[i+1]){
-            val=v[i];
-            imax=i;
-            return;
-        }
-    if(imax==0)
-        val=0;
-}
-
-
-
-//Simpler and thread safe, and no lib required
-float lineCepstrum(int j, float *linePtr,int first, int last, int x, int y, int angle, float scale=1) {
-    int result;
-    int idxTrack;
-    bool found=false;
-
-    if(saveTrackData){
-        for(idxTrack=0;idxTrack<trackPoints.size();idxTrack++)
-        {
-            if(trackPoints[idxTrack].x==x&&trackPoints[idxTrack].y==y){
-                found=true;
-                break;
-            }
-        }
+        input2[k] = k> cutoff*dws?0:sin((k/(cutoff*dws-1)) *M_PI_2)* data1[k].real(); //Shepp-Logan cutoff at 80%
+        //input2[k] = (k/dw1)* data1[k].real(); //Filtro rampa
     }
-    //if (last-first < windowSize)return 0;
-    std::complex<double> input1[windowSize];
-    select_subarray(linePtr, input1, first, last, j, windowSize,scale);
-    CArray data1(input1, windowSize);
-    if(found)
+    CArray data2(input2, winSize);
+    helper::fft(data2,true);
+    //helper::fft(data1,true);
+
+    if(idxTrack>=0)
     {
-        for (int k = 0; k < windowSize ; k++) trackData1[angle][idxTrack][k]=((float)input1[k].real());
+        for (int k = 0; k < winSize ; k++) sampleData1[sk->a][idxTrack][k]=((float)input1[k].real());
+        for (int k = 0; k < winSize ; k++) sampleData2[sk->a][idxTrack][k]=((float)input2[k].real());
+        for (int k = 0; k < winSize/4 ; k++) sampleData3[sk->a][idxTrack][k]=((float)data2[k].real());
     }
-    fft(data1,true);
-    float integral=0;
-    int L=windowSize/2;
-    std::complex<double> input2[windowSize];
-    for (int k = 0; k < windowSize/2 ; k++){
-        double PS,logPS;
-        PS=((pow(data1[k].real(), 2) + pow(data1[k].imag(), 2)));
-        //PS=norm(data1[k]);
-        logPS=log(PS);
-        //integral+=logPS;
-        input2[k] =std::complex<double>( logPS,0);
-    }
-    if(found)
-    {
-        for (int k = 0; k < windowSize/2 ; k++) trackData2[angle][idxTrack][k]=((float)input2[k].real());
-    }
-    CArray data2( input2, windowSize/2);
-    fft(data2,true);
-    double samples[windowSize/4];
-    for (int k = 0; k < windowSize/4 ; k++)
-    {
-        samples[k] =-std::min(0.0,data2[k].real());
-    }
-    double result_val;
-    getBlurParameter2(samples, windowSize/4, result, result_val);
-    integral=0;
-    for (int k = 0; k < windowSize/4 ; k++)integral+=samples[k];
-    if(found)
-    {
-        for (int k = 0; k < windowSize/4 ; k++) trackData3[angle][idxTrack][k]=((float)(data2[k].real()));
-    }
-    //Draw cepstrum curves
-    /*
-    if(false) {
-        if (i == 567 && j == 1066)
-            for (int k = 0; k < windowSize / 4; k++) {
-                int y = std::max(0, (int) (30 - samples[k] / 1000));
-                pointImgs[sector][y * 132 + 01 + k] = 0;
-            }
-        if (i == 138 && j == 357)
-            for (int k = 0; k < windowSize / 4; k++) {
-                int y = std::max(0, (int) (30 - samples[k] / 1000));
-                pointImgs[sector][y * 132 + 67 + k] = 0;
-            }
-    }
-     */
-    //if(result_val<2||result==0 || result == windowSize/4)return 0;
-    //float x=samples[result]-(samples[result-1]+samples[result+1])/2;
-    //return integral/(scale*10);
-    return result_val*10000;
-    //if(result_val<2)result=0;
-    //return result*3000;
-    //result=  first_local_max(samples, windowSize/4, result_val);
+
+    std::complex<double> val1=data2[w2].real();
+    //std::complex<double> val2=data1[winSize / 2].real()/winSize;
+    double val0=sk->skewInput[i*w+j];
+
+
+
+    return val1.real();//<0?0:val1.real() ;
 }
 
 
-//Currently, thread unsafe
-/*
-float cepstrum_i(int i,int j, float *lineFirst,int length, fftw_plan p1, fftw_plan p2,fftw_complex *out,double *samples )
+void radon(skewEngine<float> *skewEngine)
 {
-    //fftw_make_planner_thread_safe();
-    int result;
-    try {
-        //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (windowSize));
-        //double samples[windowSize];
-        //fftw_plan p1,p2;
-
-        if (length < windowSize)return 0;
-        select_subarray(lineFirst, samples, length, j, windowSize);
-        //p1 = fftw_plan_dft_r2c_1d(windowSize, samples, out, FFTW_ESTIMATE);
-        //if(p1==NULL)return 0;        else
-            fftw_execute(p1);
-        for (int k = 0; k < windowSize / 2 + 1; k++)samples[k] = log((pow(out[k][0], 2) + pow(out[k][1], 2)));
-        //p2 = fftw_plan_dft_r2c_1d(windowSize / 2 + 1, samples, out, FFTW_ESTIMATE);
-        //if(p2==NULL)return 0;         else
-            fftw_execute(p2);
-        for (int k = 0; k < (windowSize / 2 + 1) / 2 + 1; k++)samples[k] = (pow(out[k][0], 2) + pow(out[k][1], 2));
-        //fftw_free(out);
-        //fftw_destroy_plan(p1);
-        //fftw_destroy_plan(p2);
-        double v;
-        result=  first_local_max(samples, (windowSize/2+1)/2+1,v);
-    }catch(std::exception e)
-    {
-        return 0;
-    }
-    return (float)result;
-}
-*/
-
-
-
-void cepstrum(skewEngine<float> *skewEngine)
-{
-    //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (windowSize));
-    //double samples[windowSize];
-    //fftw_make_planner_thread_safe();
-    //fftw_complex *out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * (windowSize));
-    //double samples[windowSize];
-    //fftw_plan p1,p2;
-    //p1 = fftw_plan_dft_r2c_1d(windowSize, samples, out, FFTW_ESTIMATE);
-    //p2 = fftw_plan_dft_r2c_1d(windowSize / 2 + 1, samples, out, FFTW_ESTIMATE);
-
-    int q=skewEngine->sectorType;
-    bool tr,rx,ry;
-    float scale =1/skewEngine->scale;
     for(int i=0;i<skewEngine->skewHeight;i++){
         int k=skewEngine->skewWidth*i;
-        int length=skewEngine->last[i]-skewEngine->first[i];
         for(int j=skewEngine->first[i];j<skewEngine->last[i];j++) {
-            // x & y as source data
-            if(q==0){tr=false;rx=false;ry=false;};
-            if(q==1){tr=true;rx=true;ry=true;};
-            if(q==2){tr=true;rx=false;ry=true;};
-            if(q==3){tr=false;rx=true;ry=false;};
-
-            int y=!tr?i-skewEngine->target[j]:j;
-            int x=!tr?j:i-skewEngine->target[j];
-            x=rx?dimx-1-x:x;
-            y=ry?dimy-1-y:y;
-            skewEngine->skewOutput[k + j] =
-                    lineCepstrum(j, &skewEngine->skewInput[k], skewEngine->first[i], skewEngine->last[i],
-                                 x, y,skewEngine->a, scale);
-            //skewEngine->skewOutput[k+j]= cepstrum_i(i,j,&skewEngine->skewInput[k],length,p1,p2,out,samples);
+            skewEngine->skewOutput[k + j] = lineRadon(i,j,skewEngine);
         }}
-    //fftw_free(out);
-    //fftw_cleanup();
 }
 
 
 
-void showResultsRADN()
-{
-    std::ofstream punto1i("punto1i.txt");
-    std::ofstream punto2i("punto2i.txt");
-    std::ofstream punto3i("punto3i.txt");
-    std::ofstream punto1l("punto1l.txt");
-    std::ofstream punto2l("punto2l.txt");
-    std::ofstream punto3l("punto3l.txt");
-    std::ofstream punto1c("punto1c.txt");
-    std::ofstream punto2c("punto2c.txt");
-    std::ofstream punto3c("punto3c.txt");
+void showResultsRADN(float escala, float shift=0) {
+
+if(saveSampleData){
+    std::string dir = O_DIR;
+    std::ofstream punto1i(dir + "punto1i.txt");
+    std::ofstream punto2i(dir + "punto2i.txt");
+    std::ofstream punto3i(dir + "punto3i.txt");
+    std::ofstream punto1l(dir + "punto1l.txt");
+    std::ofstream punto2l(dir + "punto2l.txt");
+    std::ofstream punto3l(dir + "punto3l.txt");
+    std::ofstream punto1c(dir + "punto1c.txt");
+    std::ofstream punto2c(dir + "punto2c.txt");
+    std::ofstream punto3c(dir + "punto3c.txt");
 
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
-            punto1i << trackData1[i][0][windowSize/2+j] << " ";
-            punto2i << trackData1[i][1][windowSize/2+j] << " ";
-            punto3i << trackData1[i][2][windowSize/2+j] << " ";
+        for (int j = 0; j < winSize / 2; j++) {
+            punto1i << sampleData1[i][0][winSize / 2 + j] << " ";
+            punto2i << sampleData1[i][1][winSize / 2 + j] << " ";
+            punto3i << sampleData1[i][2][winSize / 2 + j] << " ";
         }
         punto1i << std::endl;
         punto2i << std::endl;
         punto3i << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
-            punto1i << trackData1[i][0][windowSize/2-1-j] << " ";
-            punto2i << trackData1[i][1][windowSize/2-1-j] << " ";
-            punto3i << trackData1[i][2][windowSize/2-1-j] << " ";
+        for (int j = 0; j < winSize / 2; j++) {
+            punto1i << sampleData1[i][0][winSize / 2 - 1 - j] << " ";
+            punto2i << sampleData1[i][1][winSize / 2 - 1 - j] << " ";
+            punto3i << sampleData1[i][2][winSize / 2 - 1 - j] << " ";
         }
         punto1i << std::endl;
         punto2i << std::endl;
@@ -396,20 +207,20 @@ void showResultsRADN()
 
     // Escribir segundo bloque en punto1_k1.txt
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
-            punto1l << trackData2[i][0][j] << " ";
-            punto2l << trackData2[i][1][j] << " ";
-            punto3l << trackData2[i][2][j] << " ";
+        for (int j = 0; j < winSize / 2; j++) {
+            punto1l << sampleData2[i][0][j] << " ";
+            punto2l << sampleData2[i][1][j] << " ";
+            punto3l << sampleData2[i][2][j] << " ";
         }
         punto1l << std::endl;
         punto2l << std::endl;
         punto3l << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/2; j++) {
-            punto1l << trackData2[i][0][j] << " ";
-            punto2l << trackData2[i][1][j] << " ";
-            punto3l << trackData2[i][2][j] << " ";
+        for (int j = 0; j < winSize / 2; j++) {
+            punto1l << sampleData2[i][0][j] << " ";
+            punto2l << sampleData2[i][1][j] << " ";
+            punto3l << sampleData2[i][2][j] << " ";
         }
         punto1l << std::endl;
         punto2l << std::endl;
@@ -418,20 +229,20 @@ void showResultsRADN()
 
     // Escribir tercer bloque en punto2_k2.txt
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/4; j++) {
-            punto1c << trackData3[i][0][j] << " ";
-            punto2c << trackData3[i][1][j] << " ";
-            punto3c << trackData3[i][2][j] << " ";
+        for (int j = 0; j < winSize / 4; j++) {
+            punto1c << sampleData3[i][0][j] << " ";
+            punto2c << sampleData3[i][1][j] << " ";
+            punto3c << sampleData3[i][2][j] << " ";
         }
         punto1c << std::endl;
         punto2c << std::endl;
         punto3c << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < windowSize/4; j++) {
-            punto1c << trackData3[i][0][j] << " ";
-            punto2c << trackData3[i][1][j] << " ";
-            punto3c << trackData3[i][2][j] << " ";
+        for (int j = 0; j < winSize / 4; j++) {
+            punto1c << sampleData3[i][0][j] << " ";
+            punto2c << sampleData3[i][1][j] << " ";
+            punto3c << sampleData3[i][2][j] << " ";
         }
         punto1c << std::endl;
         punto2c << std::endl;
@@ -449,23 +260,25 @@ void showResultsRADN()
     punto1c.close();
     punto2c.close();
     punto3c.close();
-
+}
 
     std::vector<unsigned char> grey;
     std::vector<unsigned char> test;
     for(int i=0;i<dim;i++) {
         grey.push_back(pixels[i]/3);
         rgbColor c;
-        if(skewAlgorithm==3) c={(unsigned char)((int)outD[i]/540),(unsigned char)((int)outD[i]/540),(unsigned char)((int)outD[i]/540)};
-        if(skewAlgorithm==1) c=HSVtoRGB({static_cast<float>(((int)outD[i])%360), 100.0f, std::min(100.0f,outD[i]/3000.0f)});  //50 for cepst index of peak
-        if(skewAlgorithm==4)
-            c=HSVtoRGB({static_cast<float>(((int)outD[i])%360), 100.0f, std::min(100.0f,outD[i]/(180*3000.0f))});  //50 for cepst index of peak
+        if(skewAlgorithm==2||skewAlgorithm==3) c={
+                                (unsigned char)((int)(outD[i]-shift)*escala),
+                                (unsigned char)((int)(outD[i]-shift)*escala),
+                                (unsigned char)((int)(outD[i]-shift)*escala)};
         test.push_back(c.R);
         test.push_back(c.G);
         test.push_back(c.B);
-    }
-    lodepng::encode("salida1.png", grey, dimx, dimy, LCT_GREY);
-    lodepng::encode("salida2.png", test, dimx, dimy, LCT_RGB);
+        }
+    std::string  fn=O_DIR;
+            ;
+    lodepng::encode((fn+ "salida1.png").c_str(), grey, dimx, dimy, LCT_GREY);
+    lodepng::encode((fn+ "salida2.png").c_str(), test, dimx, dimy, LCT_RGB);
 
 
 }

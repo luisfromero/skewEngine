@@ -1,8 +1,13 @@
+/**
+ * @file
+ * @author Felipe Romero
+ * @brief Funciones para la creación y manipulación de mapas de colores, datos HSV o RGB, etc.
+ */
 //
 // Created by Felipe on 17-11-22.
 //
+#include <cmath>
 #include "color.h"
-
 extern color *my_palette;
 
 

@@ -1,11 +1,24 @@
 /**
  * @file kernelSDEM.h
  * @author Felipe Romero
- * @brief Funciones específicas del kernel para la transformada RADON
+ * @brief Funciones específicas del kernel para el módulo de cálculo de total viewshed
  */
 
 #ifndef KSDEM_H
 #define KSDEM_H
+
+//Defaults
+#define STEP 10
+#define OBS_H 1.5
+
+
+double obsheight=OBS_H; // Elevación en metros
+float step=STEP; // Grid size
+float POVh=OBS_H; // Elevación en scala step
+float surScale; // Escala en superficie
+int utm_n,utm_e; // Coordenadas UTM
+bool floatsDEM=false; // Tipo de datos. Por ahora, short y float
+
 
 /**
  * Lee datos de un archivo y (enteros, flotantes, double, ...)
@@ -36,10 +49,99 @@ void readBilData(char *inputfilename, T *&inputData, int crop_x=0, int crop_y=0)
             fseek(f, sizeof(short)*(sdimx-dimx), SEEK_CUR);
         }
         fclose(f);
-        pair_t mm= getMinMax(inputData);
+        pair_t mm= helper::getMinMax(inputData);
         if(verbose)printf("Succesfully read DEM, with extreme values (/step): %5.1f - %6.1f\n",mm.min*step,mm.max*step);
     }
 }
+
+
+header_t parse_hdr(char *filename){
+
+    header_t hdr;
+    char tmpfn[100];
+    char hdrfile[100];
+    hdr.nitems = 0;
+
+    strcpy(tmpfn, filename);
+    char *prefix = strtok(tmpfn, ".");
+    strcpy(hdrfile, prefix);
+    strcat(hdrfile, ".hdr");
+    if (!helper::exists(hdrfile)) {
+        printf("Missing header file %s. Using default cell size %d and UTM coordinates .\n", hdrfile, 10);
+        return hdr;
+    }
+    FILE *file = fopen(hdrfile, "r");
+    char buffer[200];
+    char *name, *value;
+    char names[200];
+    // char value[200];
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        name = strtok (buffer, " ,.-=:");
+        helper::str_upr(name);
+        value = strtok(NULL, "\r\n");
+
+        char *tmp;
+        tmp = (char *)malloc(strlen(name) + 1);
+        strcpy(tmp, name);
+        hdr.keys[hdr.nitems] = tmp;
+        tmp = (char *)malloc(strlen(value) + 1);
+        strcpy(tmp, value);
+        hdr.values[hdr.nitems] = tmp;
+        hdr.nitems++;
+        // printf("%s %s\n", name, value);
+    }
+    return hdr;
+}
+
+
+
+bool check_dem(std::string argv) {
+    std::string name;
+    name=argv;
+    std::string filename=argv;
+    std::string rawname = name.substr(0, name.find_last_of("."));
+    std::string hdrname=rawname+".hdr";
+
+    header_t hdr;
+    char cadena[100];
+    char *extension;
+    char *basen;
+    long size;
+
+
+
+    hdr.nitems = 0;
+    int i = sscanf(argv.c_str(), "%d_%d_%f.bil", &utm_n, &utm_e, &step);
+    int hdimx = 0, hdimy = 0, hstep = 10, hutmn = 0, hutme = 0;
+    if (i != 4) {
+        // Este archivo no es nuestro
+        hdr = parse_hdr((char *)hdrname.c_str());
+        if (hdr.nitems == 0) {
+            for (int i = 0; i < hdr.nitems; i++) {
+                if (!strcmp(hdr.keys[i], "NROWS")) sscanf(hdr.values[i], "%d", &hdimy);
+                if (!strcmp(hdr.keys[i], "NCOLS")) sscanf(hdr.values[i], "%d", &hdimx);
+                if (!strcmp(hdr.keys[i], "CELLSIZE")) sscanf(hdr.values[i], "%d", &hstep);
+                if (!strcmp(hdr.keys[i], "XLLCORNER")) sscanf(hdr.values[i], "%d", &hutme);
+                if (!strcmp(hdr.keys[i], "YLLCORNER")) sscanf(hdr.values[i], "%d", &hutmn);
+            }
+            utm_e = hutme;
+            utm_n = hutmn + hdimy * hstep;
+            step = hstep;
+            printf("%d %d %f\n", utm_e, utm_n, step);
+        }
+
+    }
+    size = helper::filesize((char *)filename.c_str());
+    if (size > 0)
+        dimx = dimy = (int)sqrt((double)(size / (floatsDEM ? 4 : 2)));
+    else
+        return false;
+    if ((hdr.nitems != 0) && ((dimx != hdimx) || (dimy != hdimy))) return false;
+    N = dim = dimx * dimy;
+    return true;
+}
+
+
 
 /**
  *
@@ -50,13 +152,14 @@ void configureSDEM(char *filename)
     char fn[100];
     strcpy(fn,I_DIR);
     strcat(fn,filename);
-    inputD=h_DEM = new float[dim];
+    inputD = new float[dim];
     readBilData(fn, inputD);
     surScale=M_PI/(360*step*step);
     POVh=obsheight/step;
     if(verbose) {
         printf("Allocating DEM (from %s, with filesize: %dx%d and step %f) and setting observer's height to %f\n", filename, dimx, dimy,step,obsheight);
     }
+    check_dem(fn);
 }
 
 

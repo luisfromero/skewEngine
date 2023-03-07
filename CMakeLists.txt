@@ -40,28 +40,23 @@ set(ENV{CUDACXX}  "${CMAKE_CUDA_COMPILER}")
 
 set (HEADERS
         src/main.h
-        src/mainV3.h
         src/kernelRADN/kernelRADN.h
+        src/kernelBLUR/kernelBLUR.h
         src/kernelSDEM/kernelSDEM.h
         src/kernelUNIT/kernelUNIT.h
-        src/gpuSolver.cuh
         src/defaults.h
         src/global.h
         src/color.h
-        src/auxf.h
-        src/auxf.cuh
+        src/helper.h
         src/skewEngine.cuh
         )
 
+
 set (SOURCES
         src/main.cu
-        src/gpuSolver.cu
         src/global.cpp
         src/third-party/Lodepng.cpp
         src/color.cpp
-        src/auxf.cpp
-        src/auxf.cu
-        src/skewEngine.cu
         ${HEADERS}
         )
 
@@ -72,7 +67,10 @@ add_library(sk_engine SHARED ${SOURCES})
 target_include_directories(skewEngine
         PRIVATE
         ${PROJECT_SOURCE_DIR}/src
-        ${PROJECT_SOURCE_DIR}/src/
+        ${PROJECT_SOURCE_DIR}/src/kernelRADN
+        ${PROJECT_SOURCE_DIR}/src/kernelBLUR
+        ${PROJECT_SOURCE_DIR}/src/kernelUNIT
+        ${PROJECT_SOURCE_DIR}/src/kernelSDEM
         third-party
         )
 
