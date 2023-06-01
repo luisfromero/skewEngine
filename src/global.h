@@ -1,15 +1,21 @@
 //#pragma once
 #ifndef SKE_GLOBAL_H
 #define SKE_GLOBAL_H
+
+
+#ifdef _OPENMP
+#define OPENMP
+#endif
+
+
+
+
 #include <string>
 #include <chrono>
 #include <vector>
 #include "skewEngine.cuh"
 #include "defaults.h"
 #include "structures.h"
-#ifdef _OPENMP
-#define OPENMP
-#endif
 
 
 
@@ -45,6 +51,7 @@ extern int runmode;
 extern int nSamples;
 extern bool saveSampleData;
 extern std::vector<point_t>  samplePoints;
+extern std::vector<std::vector<float>>  sampleData0[180];
 extern std::vector<std::vector<float>>  sampleData1[180];
 extern std::vector<std::vector<float>>  sampleData2[180];
 extern std::vector<std::vector<float>>  sampleData3[180];
@@ -54,12 +61,18 @@ extern point_t punto3;
 
 
 //**********************************************************************************
-//                   SKEWENGINE  2023  (generic)
+//                   SKEWENGINE  2023  (algunas consideraciones generales)
 //**********************************************************************************
+
+enum RUN_MODE{CPU_MODE,GPU_MODE,HYBRID_MODE};
+enum GPU_MODE{CUDA_MODE,OPENCL_MODE};
+enum KERNELS{KERNEL_SDEM, KERNEL_IDENTITYDEM, KERNEL_RADON,KERNEL_IDENTITYIMG,KERNEL_CEPSTRUM};
 
 extern int runMode; // 0 cpu, 1 gpu, 2 hybrid task farm en el futuro
 extern int nthreads ;
 extern int nCPUs,nGPUs;
+extern int gpuMode;
+
 extern int dim,dimx,dimy,N;
 extern int maxSector;
 extern bool verbose;

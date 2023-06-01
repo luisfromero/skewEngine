@@ -14,6 +14,14 @@
 
 #ifndef SKEWENGINE_H
 #define SKEWENGINE_H
+
+//Use_opencl disables CUDA and should remove any remnants
+
+#define USE_OPENCL
+#ifdef USE_OPENCL
+#include <CL/cl.hpp>
+#endif
+
 #include <cmath>
 #include <algorithm>
 #include <sys/types.h>
@@ -28,20 +36,22 @@
 
 
 
+
 // ToDo error checks
 
+// #ifndef USE_OPENCL
 #ifdef _WIN32
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #else
 #endif
 #define cudaHostAllocPortable 0x01
+//#endif
 
 
 
+// #if !defined(USE_OPENCL) && defined(__CUDACC__)
 #if defined(__CUDACC__)
-
-
 template <typename T>
 __global__
 void cudaSkew(T *skewed, T *unskewed, double skewness, int dim_o, int dim_i) {
@@ -111,7 +121,11 @@ void cudaDeskewV0(T *unskewed, T *skewed, double skewness, int dim_o, int dim_i,
 }
 
 #endif
+// #endif
 
+#ifdef USE_OPENCL
+
+#endif
 
 template <typename T>
 struct inputData{
@@ -175,7 +189,10 @@ public:
     void kernel();
 
 
+    int *target;
+    float *weight;
     bool useV0=true; //indifferent  (weigth and target precomputed or not in gpu)
+
 
     //  *******************************************************************************
     //  Cuda section
@@ -185,21 +202,38 @@ public:
     int sectorType;
 
     bool isGPU;
+    bool isCUDA=true; // or OpenCL
     int deviceId;
     T *d_input;
     T *d_skewInput;
     T *d_skewOutput;
     T *d_output;
-    int *target;
-    float *weight;
     int *d_target;
     float *d_weight;
     short unsigned int *d_first;
     short unsigned int *d_last;
+    bool lineCUDA=false;
 
-    int startGPUbatch ;
-    int endGPUbatch;
-    int batchSize;
+    //  *******************************************************************************
+    //  OCL section
+    //  *******************************************************************************
+
+    cl::Context OCLContext=-1;
+    cl::Context OCLDevice;
+    cl::CommandQueue OCLQueue;
+
+    void skewOCLMalloc();
+    void skewOCLFree();
+
+    cl::Buffer do_input;
+    cl::Buffer do_skewInput;
+    cl::Buffer do_skewOutput;
+    cl::Buffer do_output;
+    cl::Buffer *do_target;
+    cl::Buffer *do_weight;
+    cl::Buffer *do_first;
+    cl::Buffer *do_last;
+
     //  *******************************************************************************
 
 
@@ -236,13 +270,13 @@ void skewEngine<T>::deallocate(inputData<T> inData,T* inputD,T* outD) {
 template<typename T>
 void skewEngine<T>::allocate(inputData<T> &inData,T* inputD,T** outD,int dimx, int dimy)
 {
+    int dim=dimx*dimy;
+    int dataSize=sizeof(T);
 
     // AllocDEMHost (in auxf.cu) allocate arrays in CPU in a better way than malloc, if it's going to be
     // used in CUDA  ("pinned" memory)
 
     //
-    int dim=dimx*dimy;
-    int dataSize=sizeof(T);
 
     //cpu->AllocDEMHost(inData.input0,inData.input1,inData.input2,inData.input3,dim);
     cudaHostAlloc(&inData.input0, dim* sizeof(*inData.input0), cudaHostAllocPortable) ;
@@ -290,7 +324,12 @@ skewEngine<T>::skewEngine(int dimx, int dimy, inputData<T> input, bool isGPU,int
     last=new short unsigned int[2*dim_l+1]();
     skewInput=new T[N*2+dim_l];
     skewOutput=new T[N*2+dim_l];
-    if(isGPU)skewCudaMalloc();
+    if(isGPU){
+        if(isCUDA)
+            skewCudaMalloc();
+        else
+            skewOCLMalloc();
+    }
 }
 
 
@@ -299,7 +338,12 @@ skewEngine<T>::skewEngine(int dimx, int dimy, inputData<T> input, bool isGPU,int
  */
 template<typename T>
 skewEngine<T>::~skewEngine() {
-    if(isGPU)skewCudaFree();
+    if(isGPU){
+        if(isCUDA)
+            skewCudaFree();
+        else
+            skewOCLFree();
+    }
     delete[] skewInput;
     delete[] skewOutput;
     delete[] target;
@@ -416,9 +460,10 @@ void skewEngine<T>::skew(int angle){
     }
 
 
-#if defined(__CUDACC__)
     if(isGPU)
     {
+        if(isCUDA){
+#if defined(__CUDACC__)
         cudaMemcpyAsync(d_first, first, skewHeight* sizeof(*d_first), cudaMemcpyHostToDevice, stream);
         cudaMemcpyAsync(d_last, last, skewHeight* sizeof(*d_last), cudaMemcpyHostToDevice, stream);
         if(useV0)cudaMemcpyAsync(d_weight, weight, dim_i* sizeof(*d_weight), cudaMemcpyHostToDevice, stream);
@@ -430,10 +475,13 @@ void skewEngine<T>::skew(int angle){
         dim3 blocksPerGrid(gx, gy,1);
         if(useV0) cudaSkewV0<<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewInput,d_input+sectorType*N , skewness, dim_o, dim_i,d_weight,d_target);
         else cudaSkew<<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewInput,d_input+sectorType*N , skewness, dim_o, dim_i);
-    }
-
-
 #endif
+        }
+        else
+        {
+            //OpenCL skew
+        }
+    }
 
 }
 
@@ -453,15 +501,23 @@ void skewEngine<T>::kernel() {
     else {
 #if defined(__CUDACC__)
 
-        dim3 threadsPerBlock(8, 8);
-        int gx = (skewHeight % threadsPerBlock.x == 0) ? skewHeight / threadsPerBlock.x :
-                 skewHeight / threadsPerBlock.x + 1;
-        int gy = (dim_i % threadsPerBlock.y == 0) ? dim_i / threadsPerBlock.y : dim_i / threadsPerBlock.y + 1;
-        dim3 blocksPerGrid(gx, gy);
+        if(!lineCUDA) {
+            dim3 threadsPerBlock(64, 8);
+            int gx = (skewHeight % threadsPerBlock.x == 0) ? skewHeight / threadsPerBlock.x :
+                     skewHeight / threadsPerBlock.x + 1;
+            int gy = (dim_i % threadsPerBlock.y == 0) ? dim_i / threadsPerBlock.y : dim_i / threadsPerBlock.y + 1;
+            dim3 blocksPerGrid(gx, gy);
         //cudaStreamSynchronize(stream);
-
-
             kernelgpu <<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewOutput,d_skewInput,dim_i,skewHeight,d_last,d_first,0.15f,newAngle);
+        }
+        else
+        {
+            dim3 threadsPerBlock(256, 1);
+            dim3 blocksPerGrid((dim_o + threadsPerBlock.x - 1) / threadsPerBlock.x, 1);
+        //cudaStreamSynchronize(stream);
+            kernelgpu <<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewOutput,d_skewInput,dim_i,skewHeight,d_last,d_first,0.15f,newAngle);
+
+        }
 #endif
     }
 }
@@ -495,7 +551,7 @@ void skewEngine<T>::deskew(int isMax){
         case 1:
             for(int i=0;i<dim_o;i++)
                 for(int j=0;j<dim_i;j++) {
-                    output[i * dim_i + j] = max(output[i * dim_i + j], max(skewOutput[(i + target[j]) * dim_i + j],
+                    output[i * dim_i + j] = std::max(output[i * dim_i + j], std::max(skewOutput[(i + target[j]) * dim_i + j],
                                                                            skewOutput[(i + target[j] + 1) * dim_i +
                                                                                       j]));
                     //This line encodes angular information in less significative digits
@@ -671,8 +727,22 @@ inputData<T> skewEngine<T>::prepare( inputData<T> *input , int dimx, int dimy) {
     return result;
 }
 
+template<typename T>
+void skewEngine<T>::skewOCLMalloc() {
 
+    //OCLQueue=cl::CommandQueue(OCLContext);
 
+    do_input=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, sizeof(T) * 4 * dimy * dimx);
+    do_output=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, sizeof(T) * 4 * dimy * dimx);
+    do_skewInput=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, sizeof(T) * (2 * dimy * dimx + 2*dim_l) );
+    do_skewOutput=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, sizeof(T) * (2 * dimy * dimx + 2*dim_l) );
+    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 0*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input0);
+    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 1*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input1);
+    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 2*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input2);
+    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 3*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input3);
+    cl_uint pattern = 0;
+    OCLQueue.enqueueFillBuffer(do_skewOutput,0, 0,4*dimy * dimx * sizeof(T) );
+    }
 
 template<typename T>
 void skewEngine<T>::skewCudaMalloc() {
@@ -685,8 +755,8 @@ void skewEngine<T>::skewCudaMalloc() {
     cudaMalloc(&d_first, (2*dim_l +1) * sizeof(unsigned short int)) ;
     cudaMalloc(&d_last, (2*dim_l +1) * sizeof(unsigned short int)) ;
     cudaMalloc(&d_input, 4 * dimy * dimx * sizeof(T)) ;
-    cudaMalloc(&d_skewInput, (2 * dimy * dimx + dim_l) * sizeof(T));
-    cudaMalloc(&d_skewOutput, (2 * dimy * dimx + dim_l) * sizeof(T));
+    cudaMalloc(&d_skewInput, (2 * dimy * dimx + 2*dim_l) * sizeof(T));  //Extra diml data can be used to store sinogram
+    cudaMalloc(&d_skewOutput, (2 * dimy * dimx + 2*dim_l) * sizeof(T));
     cudaMalloc(&d_output, 4 * dimy * dimx * sizeof(T));
     cudaMemsetAsync(d_output, 0, 4*dimy * dimx * sizeof(T), stream);
     cudaMemcpyAsync(d_input+0*dimx*dimy, input.input0, dimy * dimx * sizeof(T), cudaMemcpyHostToDevice, stream);
@@ -716,4 +786,9 @@ void skewEngine<T>::skewCudaFree() {
 }
 
 
+template<typename T>
+void skewEngine<T>::skewOCLFree() {
+    // cl::Buffer objects are deleted automnatically once they go out of scope.
+    OCLQueue.finish();
+}
 #endif

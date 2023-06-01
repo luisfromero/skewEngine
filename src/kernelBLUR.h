@@ -6,7 +6,7 @@
 
 #ifndef KCEP_H
 #define KCEP_H
-#include "../color.h"
+#include "color.h"
 
 
 #ifndef KERNELCOMMONS
@@ -79,7 +79,7 @@ void select_subarray(float array[], Complex *subarray, int first, int last, int 
             double gauss = exp(-(j - half) * (j - half) / (2 * sigma * sigma));
             double alpha = (j - half1 / half1);
             double hahn=0.5 * (1.0 - cos(2.0*M_PI*alpha));
-            subarray[j] = {v*hahn,0};
+            subarray[j] = {v,0};
         }
     }
 }

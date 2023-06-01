@@ -45,8 +45,9 @@ int runmode = -1; //not set
 //**********************************************************************************
 
 int nSamples=3;
-bool saveSampleData=true;
+bool saveSampleData=false;
 std::vector<point_t>  samplePoints;
+std::vector<std::vector<float>>  sampleData0[180];
 std::vector<std::vector<float>>  sampleData1[180];
 std::vector<std::vector<float>>  sampleData2[180];
 std::vector<std::vector<float>>  sampleData3[180];
@@ -56,13 +57,16 @@ point_t punto3={600,536};
 
 
 //**********************************************************************************
-//                   SKEWENGINE  2023  (generic)
+//                   SKEWENGINE  2023  (generales)
 //**********************************************************************************
 
-int runMode=0; // 0 cpu, 1 gpu, 2 hybrid task farm en el futuro
-color *my_palette;
+int runMode=GPU_MODE; // 0 cpu, 1 gpu, 2 hybrid task farm en el futuro
+int gpuMode=OPENCL_MODE; // 0 cpu, 1 gpu, 2 hybrid task farm en el futuro
+
 int nthreads = -1;//not set
 int nCPUs,nGPUs;
 int dim,dimx,dimy,N;  //N and dim are aliases
 int maxSector=180;
+
+color *my_palette;
 

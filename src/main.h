@@ -55,27 +55,49 @@ void configure(int argc, char *argv[], char * filename=NULL) {
     }
 }
 
+
+std::vector<cl::Device> OCLDevices;
+
+
+void openCLcapabilities(int *nGPUs)
+{
+    //A platform is a specific OpenCL implementation, for instance AMD APP, NVIDIA or Intel OpenCL.
+    // A context is a platform with a set of available devices for that platform.
+    // And the devices are the actual processors (CPU, GPU etc.) that perform calculations.
+    std::vector<cl::Platform> platforms;
+    cl::Platform::get(&platforms);
+    auto platform = platforms[0];
+    platform.getDevices(CL_DEVICE_TYPE_GPU, &OCLDevices);
+    int nCLGPUS=OCLDevices.size();
+    printf("Se han encontrado %d OCL-enabled GPUS\n",nCLGPUS);
+    *nGPUs=nCLGPUS;
+
+}
+
 /**
  * Initially set n threads to ncores and n gpus to available gpus
  * @param dimx
  * @param dimy
  * @param runMode
  */
-void setResources(int dimx,int dimy, int runMode=0)
+void setResources(int dimx,int dimy, int runMode=CPU_MODE, int gpuMode=CUDA_MODE)
 {
     nGPUs = 0;
-    cudaGetDeviceCount(&nGPUs);
+    if(gpuMode==CUDA_MODE)
+        cudaGetDeviceCount(&nGPUs);
+    if(gpuMode==OPENCL_MODE)
+        openCLcapabilities(&nGPUs);
 
-
+    // OpenCL
     nCPUs=omp_get_num_procs();
-    if(runMode==0)nGPUs=0;
+    if(runMode==CPU_MODE)nGPUs=0;
     if(nthreads==-1)
     {
         nthreads=nCPUs;
         while((180%nthreads))nthreads--;
         printf("Now, nthreads set to %d\n",nthreads);
     }
-    if(runMode==1)nthreads=nGPUs;
+    if(runMode==GPU_MODE)nthreads=nGPUs;
     //What happens in runmode 2? Not set
     omp_set_num_threads(nthreads);
     if(verbose) {
@@ -92,6 +114,7 @@ void setResources(int dimx,int dimy, int runMode=0)
 void execute(int skewAlgorithm=0);
 
 
+
 /**
  * Switch que selecciona la forma de mostrar los resultados, dependiendo del kernel
  * @param skewAlgorithm
@@ -105,7 +128,8 @@ void showResults(int skewAlgorithm) {
     if (skewAlgorithm == 2)escala = autoScale;//1.0/180;  //radon
     if (skewAlgorithm == 3)escala = 1.0 / 540; //identity blur
 
-    printf("Extreme values for output: %6.2f - %e  (scale = %f )\n ", (mm.min * escala), mm.max * escala, escala);
+    printf("Extreme values (unscaled) for output: %6.2f | %e  \n ", mm.min , mm.max );
+    printf("Extreme values for output: %6.2f | %e  (scale = %f )\n ", (mm.min * escala), mm.max * escala, escala);
     fflush(stdout);
 
     if(skewAlgorithm==0)showResultsSDEM();

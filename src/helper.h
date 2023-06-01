@@ -26,8 +26,28 @@
 namespace helper
 {
 
+    void fftRecursive(CArray& x)
+    {
+        const size_t N = x.size();
+        if (N <= 1) return;
 
-    /** Cooley-Tukey FFT (in-place, breadth-first, decimation-in-frequency)
+        // divide
+        CArray even = x[std::slice(0, N/2, 2)];
+        CArray  odd = x[std::slice(1, N/2, 2)];
+
+        // conquer
+        fftRecursive(even);
+        fftRecursive(odd);
+
+        // combine
+        for (size_t k = 0; k < N/2; ++k)
+        {
+            Complex t = std::polar(1.0, -2 * M_PI * k / N) * odd[k];
+            x[k    ] = even[k] + t;
+            x[k+N/2] = even[k] - t;
+        }
+    }
+/** Cooley-Tukey FFT (in-place, breadth-first, decimation-in-frequency)
  * Better optimized but less intuitive
  * !!! Warning : in some cases this code make result different from not optimased version above (need to fix bug)
  * The bug is now fixed @2017/05/30
@@ -85,6 +105,14 @@ namespace helper
     {
         x = x.apply(std::conj);
         fft( x );
+        x = x.apply(std::conj);
+        x /= x.size();
+    }
+
+    void ifftRecursive(CArray& x)
+    {
+        x = x.apply(std::conj);
+        fftRecursive( x );
         x = x.apply(std::conj);
         x /= x.size();
     }
@@ -168,9 +196,9 @@ namespace helper
         return resultado;
     }
 
-    pair_t getMinMax(double * datos)
+    paird_t getMinMax(double * datos)
     {
-        pair_t resultado;
+        paird_t resultado;
         resultado.min=DBL_MAX;
         resultado.max=DBL_MIN;
         for(int i=0;i<dimx*dimy;i++)

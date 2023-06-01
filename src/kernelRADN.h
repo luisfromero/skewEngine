@@ -6,7 +6,8 @@
 
 #ifndef KRND_H
 #define KRND_H
-#include "../color.h"
+#include "color.h"
+#include "cufft.h"
 
 #ifndef M_PI_2
 #define M_PI_2 (M_PI/2)
@@ -56,6 +57,8 @@ void allocSampleData(int sector)
 {
     for(int i=0;i<samplePoints.size();i++)
     {
+        std::vector<float> v0(winSize);
+        sampleData0[sector].push_back(v0);
         std::vector<float> v1(winSize);
         sampleData1[sector].push_back(v1);
         std::vector<float> v2(winSize);
@@ -84,8 +87,20 @@ void configureRADN(char *filename) {
     for(int i=0;i<dim;i++)inputD[i]=pixels[i];
 }
 
+void getParameter(std::valarray<std::complex<double>> v, int n, int &imax, double &val) {
+    val=0;
+    imax=0;
+    int i;
+    //Mientras sea descendiente, descartamos
+    for(i=5;i<n;i++)
+        if(norm(v[i])>norm(v[i-1]))
+            break;
+    if(i==n)
+        return;
+    else
+    {val=norm(v[i-1]);imax=i++;}
 
-
+}
 
 /**
  * This method is called for every point in every skewed mapping.
@@ -96,7 +111,7 @@ void configureRADN(char *filename) {
  * @param y Column index in the original data
  * @returns Computed value for this point
  */
-float lineRadon(int i,int j, skewEngine<float> * sk) {
+float pointRadon(int i, int j, skewEngine<float> * sk) {
     /// Averiguamos si es un punto de interés. Devuelve -1 en caso contrario
     int idxTrack=isSamplePoint(getXY(i,j,sk));
 
@@ -106,10 +121,12 @@ float lineRadon(int i,int j, skewEngine<float> * sk) {
     double dws=winSize;
     double dw2=w2;
     double dw1 = (winSize-1);
-    double sigma= sigma*winSize / 20;
-    double cutoff=0.5;
+    double sigma= winSize / 5.0;
+
+    sigma=sigma/sk->scale;
     /// Calculate Radon transform (ramp filtered)
     std::complex<double> input1[winSize];
+    double axis[winSize+1];
     for(int k=i-w2;k<i+w2;k++) {  //Par. Punto i en posición w2 de input1
         double accum=0;
         int fi=sk->first[k];
@@ -117,11 +134,13 @@ float lineRadon(int i,int j, skewEngine<float> * sk) {
         for (int l = j-w2; l <= j+w2; l++) //Impar. Centrado en j
             accum += (k<0|| k>=h)?0:( (l<fi||l>=la)?0:sk->skewInput[k*w+l] );
         int kk=k - (i-w2); //de 0 a wsize
-        double gauss = exp(-(j - w2) * (j - w2) / (2 * sigma * sigma));
-        double hahn=0.5 * (1.0 - cos(2.0*M_PI*(kk / dw1)));// 1-cos -> 0 a 2 a 0 ->
+        double gauss = exp(-(kk - w2) * (kk - w2) / (2 * sigma * sigma));
+        double hahn=      0.5 * (1.0 - cos(2.0*M_PI*(kk / dw1)));// 1-cos -> 0 a 2 a 0 ->
         double ramp=1-abs((k-i)/dw2);
-        input1[k - (i-w2)]= {accum*ramp,0};
+        input1[kk]= {accum*gauss ,0};
+        axis[kk]=(j+k-i<fi)?0:(j+k-i>=la?0:gauss*sk->skewInput[i*w+j+k-i]);
     }
+    // Test only
 
     /// FFT to Radon
     CArray data1(input1, winSize);
@@ -130,11 +149,12 @@ float lineRadon(int i,int j, skewEngine<float> * sk) {
 
     //Frecuencia 0 en k=0. En k=winSize, la frecuencia es la de muestreo
     //Se aplica un filtro pasa-alta
+    double cutoff=0.4;
+
     for(int k=0;k<winSize;k++) {
         // input2[k] = k<5?0:data1[k].real(); //Filtro pasa alta alo bruto -> borrosillo
         // input2[k] = data1[k].real(); //No filtramos nada -> borroso
         // input2[k] = sin((k/dw1) *M_PI_2)* data1[k].real(); //Shepp-Logan de 0 a 1 a ritmo de Pi
-
         input2[k] = k> cutoff*dws?0:sin((k/(cutoff*dws-1)) *M_PI_2)* data1[k].real(); //Shepp-Logan cutoff at 80%
         //input2[k] = (k/dw1)* data1[k].real(); //Filtro rampa
     }
@@ -144,36 +164,107 @@ float lineRadon(int i,int j, skewEngine<float> * sk) {
 
     if(idxTrack>=0)
     {
-        for (int k = 0; k < winSize ; k++) sampleData1[sk->a][idxTrack][k]=((float)input1[k].real());
+        for (int k = 0; k < winSize ; k++) sampleData0[sk->a][idxTrack][k]=((float)input1[k].real());
+        for (int k=j-w2;k<j+w2;k++) sampleData1[sk->a][idxTrack][k-(j-w2)]=axis[k-(j-w2)];
         for (int k = 0; k < winSize ; k++) sampleData2[sk->a][idxTrack][k]=((float)input2[k].real());
-        for (int k = 0; k < winSize/4 ; k++) sampleData3[sk->a][idxTrack][k]=((float)data2[k].real());
+        for (int k = 0; k < winSize ; k++) sampleData3[sk->a][idxTrack][k]=((float)data2[k].real());
     }
 
     std::complex<double> val1=data2[w2].real();
     //std::complex<double> val2=data1[winSize / 2].real()/winSize;
     double val0=sk->skewInput[i*w+j];
-
-
+    double v;
+    int idx;
+    getParameter(data2,w2,idx,v);
+    return v;
 
     return val1.real();//<0?0:val1.real() ;
 }
+__global__
+void kernelRadonCuda(float *skewOutput, float *skewInput, int dim_i, int skewHeight, unsigned short *d_last, unsigned short *d_first, float POVh, int angle) {
+    size_t work_size;
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= skewHeight)return;
+    int start, end;
+    start = d_first[row];
+    end = d_last[row];
+    float sum = 0.0f;
+    for (int i = start; i < end; i++)sum += skewInput[row * dim_i + i];
+    *(skewInput + dim_i * skewHeight + row) = sum;
+    // __syncthreads();
+    for (int i = start; i < end; i++) skewOutput[row * dim_i + i] = sum;
 
 
+    }
+
+
+
+
+
+
+
+
+
+
+/**
+ * Global (false) or Local (true) Radon Transform
+ */
+bool LRT=false;
 void radon(skewEngine<float> *skewEngine)
 {
-    for(int i=0;i<skewEngine->skewHeight;i++){
-        int k=skewEngine->skewWidth*i;
-        for(int j=skewEngine->first[i];j<skewEngine->last[i];j++) {
-            skewEngine->skewOutput[k + j] = lineRadon(i,j,skewEngine);
-        }}
+    if(LRT)
+        for(int i=0;i<skewEngine->skewHeight;i++){
+            int k=skewEngine->skewWidth*i;
+            for(int j=skewEngine->first[i];j<skewEngine->last[i];j++) {
+                skewEngine->skewOutput[k + j] = pointRadon(i, j, skewEngine);
+            }}
+    else {
+
+        int H=skewEngine->skewHeight;
+        int H2=pow(2,ceil(log2(H)));
+        std::valarray<std::complex<double>> data1;        // Radon transform
+        data1.resize(H2,{0,0});
+        for (int i = 0; i < H; i++) {
+            int k = skewEngine->skewWidth * i;
+            for (int j = skewEngine->first[i]; j < skewEngine->last[i]; j++) {
+                data1[i]={data1[i].real()+skewEngine->skewInput[k + j],0};
+            }
+        }
+
+
+
+
+
+
+        if(true) {
+
+            helper::fft(data1);
+            //Shepp-Logan
+            double cutoff = 0.4 * H;
+            //for (int i = 0; i < 8192; i++) data1[i] =  abs(1-(4096-i)/4096.0)*data1[i].real();
+            //for(int i=H;i<4096;i++)data1[i]=0;
+            //for (int i = 0; i < H2; i++) data1[i] = i > cutoff ? 0 : sin((i / cutoff) * M_PI_2) * data1[i];
+            for (int i = 0; i < H2; i++) data1[i] = i > H/2 ? 0 : ((double)i/H) * data1[i];
+            helper::ifft(data1);
+        }
+
+        // Back propagation
+        for (int i = 0; i < H; i++) {
+            int k = skewEngine->skewWidth * i;
+            for (int j = skewEngine->first[i]; j < skewEngine->last[i]; j++) {
+                skewEngine->skewOutput[k + j] += data1[i].real();
+            }
+        }
+    }
 }
-
-
 
 void showResultsRADN(float escala, float shift=0) {
 
 if(saveSampleData){
     std::string dir = O_DIR;
+    std::ofstream punto1o(dir + "punto1o.txt");
+    std::ofstream punto2o(dir + "punto2o.txt");
+    std::ofstream punto3o(dir + "punto3o.txt");
     std::ofstream punto1i(dir + "punto1i.txt");
     std::ofstream punto2i(dir + "punto2i.txt");
     std::ofstream punto3i(dir + "punto3i.txt");
@@ -183,22 +274,47 @@ if(saveSampleData){
     std::ofstream punto1c(dir + "punto1c.txt");
     std::ofstream punto2c(dir + "punto2c.txt");
     std::ofstream punto3c(dir + "punto3c.txt");
+    //int w=winSize;
+    int w2=winSize / 2;
+    int w4=winSize / 4;
 
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < winSize / 2; j++) {
-            punto1i << sampleData1[i][0][winSize / 2 + j] << " ";
-            punto2i << sampleData1[i][1][winSize / 2 + j] << " ";
-            punto3i << sampleData1[i][2][winSize / 2 + j] << " ";
+        for (int j = 0; j < w2; j++) {
+            punto1o << sampleData0[i][0][w2+j] << " ";
+            punto2o << sampleData0[i][1][w2+j] << " ";
+            punto3o << sampleData0[i][2][w2+j] << " ";
+        }
+        punto1o << std::endl;
+        punto2o << std::endl;
+        punto3o << std::endl;
+    }
+    for (int i = 0; i < 180; i++) {
+        for (int j = 0; j < w2; j++) {
+            punto1o << sampleData0[i][0][w2-j] << " ";
+            punto2o << sampleData0[i][1][w2-j] << " ";
+            punto3o << sampleData0[i][2][w2-j] << " ";
+        }
+        punto1o << std::endl;
+        punto2o << std::endl;
+        punto3o << std::endl;
+    }
+
+
+    for (int i = 0; i < 180; i++) {
+        for (int j = 0; j < w2; j++) {
+            punto1i << sampleData1[i][0][w2+j] << " ";
+            punto2i << sampleData1[i][1][w2+j] << " ";
+            punto3i << sampleData1[i][2][w2+j] << " ";
         }
         punto1i << std::endl;
         punto2i << std::endl;
         punto3i << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < winSize / 2; j++) {
-            punto1i << sampleData1[i][0][winSize / 2 - 1 - j] << " ";
-            punto2i << sampleData1[i][1][winSize / 2 - 1 - j] << " ";
-            punto3i << sampleData1[i][2][winSize / 2 - 1 - j] << " ";
+        for (int j = 0; j < w2; j++) {
+            punto1i << sampleData1[i][0][w2-j] << " ";
+            punto2i << sampleData1[i][1][w2-j] << " ";
+            punto3i << sampleData1[i][2][w2-j] << " ";
         }
         punto1i << std::endl;
         punto2i << std::endl;
@@ -207,20 +323,20 @@ if(saveSampleData){
 
     // Escribir segundo bloque en punto1_k1.txt
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < winSize / 2; j++) {
-            punto1l << sampleData2[i][0][j] << " ";
-            punto2l << sampleData2[i][1][j] << " ";
-            punto3l << sampleData2[i][2][j] << " ";
+        for (int j = 0; j < w2; j++) {
+            punto1l << sampleData2[i][0][w2-j] << " ";
+            punto2l << sampleData2[i][1][w2-j] << " ";
+            punto3l << sampleData2[i][2][w2-j] << " ";
         }
         punto1l << std::endl;
         punto2l << std::endl;
         punto3l << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < winSize / 2; j++) {
-            punto1l << sampleData2[i][0][j] << " ";
-            punto2l << sampleData2[i][1][j] << " ";
-            punto3l << sampleData2[i][2][j] << " ";
+        for (int j = 0; j < w2; j++) {
+            punto1l << sampleData2[i][0][w2-j] << " ";
+            punto2l << sampleData2[i][1][w2-j] << " ";
+            punto3l << sampleData2[i][2][w2-j] << " ";
         }
         punto1l << std::endl;
         punto2l << std::endl;
@@ -229,20 +345,20 @@ if(saveSampleData){
 
     // Escribir tercer bloque en punto2_k2.txt
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < winSize / 4; j++) {
-            punto1c << sampleData3[i][0][j] << " ";
-            punto2c << sampleData3[i][1][j] << " ";
-            punto3c << sampleData3[i][2][j] << " ";
+        for (int j = 0; j < w2; j++) {
+            punto1c << sampleData3[i][0][w2+j] << " ";
+            punto2c << sampleData3[i][1][w2+j] << " ";
+            punto3c << sampleData3[i][2][w2+j] << " ";
         }
         punto1c << std::endl;
         punto2c << std::endl;
         punto3c << std::endl;
     }
     for (int i = 0; i < 180; i++) {
-        for (int j = 0; j < winSize / 4; j++) {
-            punto1c << sampleData3[i][0][j] << " ";
-            punto2c << sampleData3[i][1][j] << " ";
-            punto3c << sampleData3[i][2][j] << " ";
+        for (int j = 0; j < w2; j++) {
+            punto1c << sampleData3[i][0][w2-j] << " ";
+            punto2c << sampleData3[i][1][w2-j] << " ";
+            punto3c << sampleData3[i][2][w2-j] << " ";
         }
         punto1c << std::endl;
         punto2c << std::endl;
@@ -251,7 +367,10 @@ if(saveSampleData){
 
 
     // Cerrar archivos
-    punto1i.close();
+    punto1o.close();
+    punto2o.close();
+    punto3o.close();
+    punto1o.close();
     punto2i.close();
     punto3i.close();
     punto1l.close();

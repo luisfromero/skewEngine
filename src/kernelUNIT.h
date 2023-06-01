@@ -36,6 +36,11 @@ void identityCuda(float *d_skewOutput, float *d_skewInput, int dim_i, int skewHe
 }
 
 
+void identityOCL(float *d_skewOutput, float *d_skewInput, int dim_i, int skewHeight,  unsigned short * d_last,unsigned short * d_first, float val, int ang)
+{
+
+}
+
 void showResultsUNIT()
 {
     //Aquí deberíamos calcular el porcentaje de diferencias debido a la interpolación y extrapolación

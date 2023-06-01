@@ -16,6 +16,10 @@ typedef struct  {
     float min;
     float max;
 }    pair_t;
+typedef struct  {
+    double min;
+    double max;
+}    paird_t;
 
 typedef struct  {
     int x;

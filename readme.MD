@@ -458,6 +458,58 @@ int main() {
 ```
 
 
+## Extensión a 3 dimensiones skewEngine3D
+
+Si el procesamiento intensivo de datos, con una dependencia de todos con todos en cualquier dirección sobre una malla de datos bidimensional es muy costoso en dos dimensiones, su extensión a tres dimensiones puede ser excepcionalmente costoso, por lo que es evidente que cualquier forma de abordar el problema debe partir de dos premisas similares a nuestra anterior propuesta en dos dimensiones. 
+
+En primer lugar, el infinito número de direcciones en el que podríamos procesar los datos debe reducirse, de una forma similar a como ya se hizo  con la discretización azimuthal en 2D con skewEngine, y que por defecto, dividía el espacio en 360º.
+
+En segundo lugar, los datos deben alinearse en memoria, e incluso sería altamente recomendable un almacenamiento alineado de la información en memoria secundaria, tambien usando criterios similares a skewEngine. 
+
+El primer problema, lo hemos resuelto utilizando un elegante y sencillo método de discretización del espacio 3D:  la espiral esférica de Fibonacci (meter un poco de rollo)
+
+<p style=text-align:center;>
+<img src="img/fib3d.png" height=380> 
+</p>
+
+El siguiente código muestra cómo se calculan las direcciones de procesamiento discretas (ejes de Fibonacci):
+
+```C++
+double golden = (1.0 + sqrt(5.0)) / 2.0;
+
+for (int i = 0; i < n; i++) {
+    double the = 2.0 * pi * i / golden;
+    double phi = acos(1-2*(i+0.5)/n);
+    double sphi = sin(phi);
+    x = sphi * cos(the);
+    y = sphi * sin(the);
+    z = cos(phi);
+    x_axes[i]={x, y, z};
+    }
+```
+
+Como se observa en el código, y haciendo un simil de la esfera con nuestro planeta, las latitudes de los diferentes ejes están equitativamente distribuidos, de forma que si el número de ejes fuera n=180, habría una separación exacta de un grado de latitud entre ejes (latitudes desde 0.5 a 179.5, para ser precisos). Por otra parte, a cada "latitud discreta" le corresponde una longitud exclusiva que depende de la razón áurea. Siguiendo con el simil, podría ser que a la latitud 36.5 le corresponda la longitud de Málaga, pero la anterior (35.5), coincida en longitud con Tokio.
+
+Podemos aprovechar entonces la distribución equtativa de latitudes para resolver el problema del alineamiento de los datos mediante la reutilización de un código existente: skewEngine 2D. De esta forma, los nx planos de datos (dimensiones ny.nz) serían reproyectados con el algoritmo skewEngine generando un cubo sesgado perpendicularmente a z. Veamos un ejemplo:
+
+<p style=text-align:center;>
+<img src="img/skew3D.png" height=380> 
+</p>
+
+
+Una malla tridimensional de datos, como la representada en la esfera tiene los datos alineados en memoria según la dirección marcada en rojo. Esto es, la arista que separa su cara amarilla de la roja son datos consecutivos. A esa situación inicial, la marcamos con latitud y logitud cero. 
+
+Sin embargo, queremos aplicar un algoritmo intensivo que procese los datos en la dirección marcada por la flecha azul, de latitud -15º y longitud 15º. Para alinear la información, se realizaran dos pasos. En una de ellas se alinea en latitud, y en la segunda etapa, en longitud (o viceversa):
+
+<p style=text-align:center;>&nbsp;
+<img src="img/skew3Da.png" height=380>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="img/skew3Db.png" height=380> 
+</p>
+
+Este mecanismo de alineamiento de datos tridimensionales ha sido utilizado con éxito para el entrenamiento de redes neuronales de objetos tridimensionales...
+
+
 ## Próximos pasos
 
 Buscar dos imágenes con parte borrosa total y por zonas y pasarla a mapa de píxeles grises.
