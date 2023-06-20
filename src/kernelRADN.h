@@ -402,5 +402,13 @@ if(saveSampleData){
 
 }
 
+// ToDo
+const std::string kernelRadonOCL=
+        "__kernel void mainKernel(global float* T, global float *S, int w, int h, global unsigned short *last , global unsigned short *first, float val, int ang)"
+        "   {"
+        "   int i=get_global_id(0);"
+        "   //if(i<n)\n"
+        "       T[i]=S[i];"
+        "   }";
 
 #endif

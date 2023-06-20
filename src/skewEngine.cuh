@@ -56,8 +56,8 @@ template <typename T>
 __global__
 void cudaSkew(T *skewed, T *unskewed, double skewness, int dim_o, int dim_i) {
 
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     float y = skewness * col;
     int dest = y;
@@ -73,8 +73,8 @@ template <typename T>
 __global__
 void cudaDeskew(T *unskewed, T *skewed, double skewness, int dim_o, int dim_i) {
 
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     float y = skewness * col;
     int dest = y;
@@ -90,8 +90,8 @@ template <typename T>
 __global__
 void cudaSkewV0(T *skewed, T *unskewed, double skewness, int dim_o, int dim_i, float *w, int *t) {
 
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     //float y = skewness * col;
     //int dest = y;
@@ -107,8 +107,8 @@ template <typename T>
 __global__
 void cudaDeskewV0(T *unskewed, T *skewed, double skewness, int dim_o, int dim_i, float *w, int *t) {
 
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
 //    float y = skewness * col;
 //    int dest = y;
@@ -125,6 +125,8 @@ void cudaDeskewV0(T *unskewed, T *skewed, double skewness, int dim_o, int dim_i,
 
 #ifdef USE_OPENCL
 
+
+
 #endif
 
 template <typename T>
@@ -138,10 +140,102 @@ struct inputData{
 
 
 
+
 // T can be float, double, ...
 template <typename T>
 class skewEngine {
     typedef void (*pkernelfunc)(skewEngine<T> *skewer);
+
+    std::string openCL_kernel_funcs =
+            "void atomic_add_f(volatile global float* addr, const float val) {\n"
+            "    union {\n"
+            "        uint  u32;\n"
+            "        float f32;\n"
+            "    } next, expected, current;\n"
+            "    current.f32 = *addr;\n"
+            "    do {\n"
+            "        next.f32 = (expected.f32=current.f32)+val; // ...*val for atomic_mul_f()\n"
+            "        current.u32 = atomic_cmpxchg((volatile global uint*)addr, expected.u32, next.u32);\n"
+            "    } while(current.u32!=expected.u32);\n"
+            "}"
+            ;
+    std::string openCL_kernel_skew =
+            "__kernel void kernelSkew(float skewness, "
+            "    int dim_o, int dim_i, "
+            "    global float* skewed,"
+            "    global float* unskewed,"
+            "    int offset"
+            "    ){ "
+            "    int row = get_group_id(1) * get_local_size(1) + get_local_id(1);"
+            "    int col = get_group_id(0) * get_local_size(0) + get_local_id(0);"
+            "    float w;"
+            "    int t;"
+            "    float y=skewness*col;t=y;w=y-t;\n"
+            "    //w=weight[col];t=target[col];\n"
+            "    if (row < dim_o && col < dim_i) {\n"
+            "        //skewed[(row + t) * dim_i + col ]    +=(1.0 - w) * unskewed[dim_i * row + col];\n"
+            "        //skewed[(row + t + 1) * dim_i + col ]+= w       * unskewed[dim_i * row + col];\n"
+            "        atomic_add_f(&skewed[(row + t + 0) * dim_i + col ], (1.0 - w) * unskewed[offset+dim_i * row + col]);\n"
+            "        atomic_add_f(&skewed[(row + t + 1) * dim_i + col ], (      w) * unskewed[offset+dim_i * row + col]);\n"
+            "    }        "
+            "   } ";
+    std::string openCL_kernel_skewV0 =
+            "void atomic_add_f(volatile global float* addr, const float val) {\n"
+            "    union {\n"
+            "        uint  u32;\n"
+            "        float f32;\n"
+            "    } next, expected, current;\n"
+            "    current.f32 = *addr;\n"
+            "    do {\n"
+            "        next.f32 = (expected.f32=current.f32)+val; // ...*val for atomic_mul_f()\n"
+            "        current.u32 = atomic_cmpxchg((volatile global uint*)addr, expected.u32, next.u32);\n"
+            "    } while(current.u32!=expected.u32);\n"
+            "}"
+            "__kernel void kernelSkew(float skewness, "
+            "    int dim_o, int dim_i, "
+            "    global float* skewed,"
+            "    global float* unskewed,"
+            "    int offset, global float * weight, global int * target"
+            "    ){ "
+            "    int row = get_group_id(1) * get_local_size(1) + get_local_id(1);"
+            "    int col = get_group_id(0) * get_local_size(0) + get_local_id(0);"
+            "    float w;"
+            "    int t;"
+            "    //float y=skewness*col;t=y;w=y-t;\n"
+            "    w=weight[col];t=target[col];\n"
+            "    if (row < dim_o && col < dim_i) {\n"
+            "        //skewed[(row + t) * dim_i + col ]    +=(1.0 - w) * unskewed[dim_i * row + col];\n"
+            "        //skewed[(row + t + 1) * dim_i + col ]+= w       * unskewed[dim_i * row + col];\n"
+            "        atomic_add_f(&skewed[(row + t + 0) * dim_i + col ], (1.0 - w) * unskewed[offset+dim_i * row + col]);\n"
+            "        atomic_add_f(&skewed[(row + t + 1) * dim_i + col ], (      w) * unskewed[offset+dim_i * row + col]);\n"
+            "    }        "
+            "   } "
+            ;
+    std::string openCL_kernel_deskew =
+            "   __kernel void kernelDeskew(float skewness, int dim_o, int dim_i, global float* unskewed, global float* skewed,int offset){ "
+            "    int row = get_group_id(1) * get_local_size(1) + get_local_id(1);"
+            "    int col = get_group_id(0) * get_local_size(0) + get_local_id(0);"
+            "    float w;"
+            "    int t;"
+            "    float y=skewness*col;t=y;w=y-t;\n"
+            "    //w=weight[col];t=target[col];\n"
+            "    if (row < dim_o && col < dim_i)"
+            "        unskewed[offset+row * dim_i + col] +=(1.0 - w) * skewed[(row + t) * dim_i + col]+ w * skewed[(row + t + 1) * dim_i + col];"
+            "   } ";
+    std::string openCL_kernel_deskewV0 =
+            "   __kernel void kernelDeskew(float skewness, int dim_o, int dim_i, global float* unskewed, global float* skewed,int offset,global float *weight, global int* target){ "
+            "    int row = get_group_id(1) * get_local_size(1) + get_local_id(1);"
+            "    int col = get_group_id(0) * get_local_size(0) + get_local_id(0);"
+            "    float w;"
+            "    int t;"
+            "    //float y=skewness*col;t=y;w=y-t;\n"
+            "    w=weight[col];t=target[col];\n"
+            "    if (row < dim_o && col < dim_i)"
+            "        unskewed[offset+row * dim_i + col] +=(1.0 - w) * skewed[(row + t) * dim_i + col]+ w * skewed[(row + t + 1) * dim_i + col];"
+            "   } "
+            ;
+
+
 
 
     inputData<T> input;
@@ -187,11 +281,11 @@ public:
     static void allocate(inputData<T> &inData,T* inputD,T** outD,int dimx, int dimy);
     static void deallocate(inputData<T> inData,T* inputD,T* outD);
     void kernel();
-
+    void skewAlloc();
 
     int *target;
     float *weight;
-    bool useV0=true; //indifferent  (weigth and target precomputed or not in gpu)
+    bool useV0=true; //slightly better in CUDA, bad in OpenCL  (weigth and target precomputed or not in gpu)
 
 
     //  *******************************************************************************
@@ -218,9 +312,13 @@ public:
     //  OCL section
     //  *******************************************************************************
 
-    cl::Context OCLContext=-1;
-    cl::Context OCLDevice;
+    cl::Context OCLContext;
+    cl::Device OCLDevice;
     cl::CommandQueue OCLQueue;
+    cl::Program::Sources OCLSources;
+    cl::Program OCLProgram;
+
+
 
     void skewOCLMalloc();
     void skewOCLFree();
@@ -229,11 +327,17 @@ public:
     cl::Buffer do_skewInput;
     cl::Buffer do_skewOutput;
     cl::Buffer do_output;
-    cl::Buffer *do_target;
-    cl::Buffer *do_weight;
-    cl::Buffer *do_first;
-    cl::Buffer *do_last;
+    cl::Buffer do_target;
+    cl::Buffer do_weight;
+    cl::Buffer do_first;
+    cl::Buffer do_last;
 
+    /*
+    cl::make_kernel<cl::Buffer, cl::Buffer> k1;
+    cl::make_kernel<cl::Buffer, cl::Buffer> k2;
+    cl::make_kernel<cl::Buffer, cl::Buffer> k3;
+    */
+    cl::Kernel kernelSkewOCL,kernelDeskewOCL,kernMain;
     //  *******************************************************************************
 
 
@@ -250,8 +354,10 @@ public:
     double skewness,iskewness;
     int dim_i,dim_o;
 
-    void (*kernelgpu)(T *d_skewOutput,T *d_skewInput,int dim_i,int skewHeight,unsigned short *d_first,unsigned short *d_last, T val, int angle);
+    void (*kernelcuda)(T *d_skewOutput, T *d_skewInput, int dim_i, int skewHeight, unsigned short *d_first, unsigned short *d_last, T val, int angle);
     void (*kernelcpu)(skewEngine<T> *);
+    std::string  kernelOCL;
+
 };
 
 /*
@@ -297,14 +403,52 @@ void skewEngine<T>::allocate(inputData<T> &inData,T* inputD,T** outD,int dimx, i
 
 
 
+template<typename T>
+void skewEngine<T>::skewAlloc()
+{
+    weight=new float[dim_l]();
+    target=new int[dim_l]();
+    first=new short unsigned int[2*dim_l+1]();
+    last=new short unsigned int[2*dim_l+1]();
+    skewInput=new T[N*2+dim_l];
+    skewOutput=new T[N*2+dim_l];
+    if(isGPU){
+        if(isCUDA)
+            skewCudaMalloc();
+        else {
+            //Link kernels against context
+            //OCLSources.push_back({openCL_kernel_funcs.c_str(), openCL_kernel_funcs.length()});
+            if(useV0)OCLSources.push_back({openCL_kernel_skewV0.c_str(), openCL_kernel_skewV0.length()});             else
+                    OCLSources.push_back({openCL_kernel_skew.c_str(), openCL_kernel_skew.length()});
+            if(useV0)                 OCLSources.push_back({openCL_kernel_deskewV0.c_str(), openCL_kernel_deskewV0.length()});       else
+                    OCLSources.push_back({openCL_kernel_deskew.c_str(), openCL_kernel_deskew.length()});
+            OCLSources.push_back({kernelOCL.c_str(), kernelOCL.length()});
+            OCLProgram = cl::Program(OCLContext, OCLSources);
 
+            //Aquí se compila
+            if (OCLProgram.build({OCLDevice}) != CL_SUCCESS) {
+                std::cout << " Error building: " << OCLProgram.getBuildInfo<CL_PROGRAM_BUILD_LOG>(OCLDevice) << "\n";
+                exit(1);
+            }
+
+
+            //k1= cl::make_kernel<cl::Buffer, cl::Buffer>(OCLProgram, "openCL_kernel_skew");
+            kernelSkewOCL = cl::Kernel(OCLProgram, "kernelSkew");
+            kernelDeskewOCL = cl::Kernel(OCLProgram, "kernelDeskew");
+            kernMain = cl::Kernel(OCLProgram, "mainKernel");
+            skewOCLMalloc();
+        }
+
+    }
+
+}
 
 
 
 // dimx, dimy, input has been initiated with arguments values
 template<typename T>
 skewEngine<T>::skewEngine(int dimx, int dimy, inputData<T> input, bool isGPU,int deviceId) : dimx(dimx), dimy(dimy), input(input), isGPU(isGPU), deviceId(deviceId)
-{
+ {
     N=dimx*dimy;
     fAngle= atan2(dimy,dimx)*180/M_PI;
 
@@ -318,18 +462,6 @@ skewEngine<T>::skewEngine(int dimx, int dimy, inputData<T> input, bool isGPU,int
     //Largest dimension
     dim_l=MAX(dimx,dimy);
 
-    weight=new float[dim_l]();
-    target=new int[dim_l]();
-    first=new short unsigned int[2*dim_l+1]();
-    last=new short unsigned int[2*dim_l+1]();
-    skewInput=new T[N*2+dim_l];
-    skewOutput=new T[N*2+dim_l];
-    if(isGPU){
-        if(isCUDA)
-            skewCudaMalloc();
-        else
-            skewOCLMalloc();
-    }
 }
 
 
@@ -397,11 +529,27 @@ void skewEngine<T>::computeParams(int angle)
 template<typename T>
 void skewEngine<T>::resetSkew() {
     if(isGPU){
+        if(isCUDA){
 #if defined(__CUDACC__)
-        cudaMemsetAsync(d_skewOutput, 0, dim_i* skewHeight* sizeof(*d_skewOutput), stream);
+            cudaMemsetAsync(d_skewOutput, 0, dim_i* skewHeight* sizeof(*d_skewOutput), stream);
         cudaMemsetAsync(d_skewInput, 0, dim_i* skewHeight* sizeof(*d_skewInput), stream);
         //cudaStreamSynchronize(stream);
 #endif
+
+        }
+        else
+        {
+            T pattern = 0;
+            cl_int error;
+            error=OCLQueue.enqueueFillBuffer(do_skewInput,pattern, 0, dim_i* skewHeight* sizeof(T) );
+            if(error)
+                exit(0);
+            error=OCLQueue.enqueueFillBuffer(do_skewOutput,pattern, 0, dim_i* skewHeight* sizeof(T) );
+            if(error)
+                exit(0);
+
+            OCLQueue.finish();
+        }
     }
     else {
         memset(skewInput, 0, skewHeight * dim_i * sizeof(*skewInput));
@@ -434,6 +582,7 @@ void skewEngine<T>::skewShape()
     }
 
 }
+
 
 /**
  * Remap {image/dem/x-y data/etc.}  to its skewed position, calculates weights, and limits
@@ -470,8 +619,8 @@ void skewEngine<T>::skew(int angle){
         if(useV0)cudaMemcpyAsync(d_target, target, dim_i* sizeof(*d_target), cudaMemcpyHostToDevice, stream);
         //based on ExecuteAccMultiGPUmaster
         dim3 threadsPerBlock(8, 8,1);
-        int gx = (dim_o % threadsPerBlock.x == 0) ? dim_o / threadsPerBlock.x : dim_o / threadsPerBlock.x + 1;
-        int gy = (dim_i % threadsPerBlock.y == 0) ? dim_i / threadsPerBlock.y : dim_i / threadsPerBlock.y + 1;
+        int gx = (dim_i % threadsPerBlock.x == 0) ? dim_i / threadsPerBlock.x : dim_i / threadsPerBlock.x + 1;
+        int gy = (dim_o % threadsPerBlock.y == 0) ? dim_o / threadsPerBlock.y : dim_o / threadsPerBlock.y + 1;
         dim3 blocksPerGrid(gx, gy,1);
         if(useV0) cudaSkewV0<<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewInput,d_input+sectorType*N , skewness, dim_o, dim_i,d_weight,d_target);
         else cudaSkew<<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewInput,d_input+sectorType*N , skewness, dim_o, dim_i);
@@ -479,7 +628,42 @@ void skewEngine<T>::skew(int angle){
         }
         else
         {
-            //OpenCL skew
+            cl_int error;
+            error=OCLQueue.enqueueWriteBuffer(do_first, CL_TRUE, 0,skewHeight* sizeof(unsigned short int), first);
+//            OCLQueue.finish(); //Wait
+            if(error)
+                exit(error);
+            error=OCLQueue.enqueueWriteBuffer(do_last, CL_TRUE, 0,skewHeight* sizeof(unsigned short int), last);
+            if(error)
+                exit(error);
+            if(useV0)OCLQueue.enqueueWriteBuffer(do_weight, CL_TRUE, 0,dim_i* sizeof(float), weight);
+            if(useV0)OCLQueue.enqueueWriteBuffer(do_target, CL_TRUE, 0,dim_i* sizeof(int), target);
+//            OCLQueue.finish(); //Wait
+
+
+
+
+
+            kernelSkewOCL.setArg(0, (float)skewness);
+            kernelSkewOCL.setArg(1, dim_o);
+            kernelSkewOCL.setArg(2, dim_i);
+            kernelSkewOCL.setArg(3, do_skewInput);
+            kernelSkewOCL.setArg(4, do_input);
+            kernelSkewOCL.setArg(5, N*sectorType);
+            if(useV0)kernelSkewOCL.setArg(6, do_weight);
+            if(useV0)kernelSkewOCL.setArg(7, do_target);
+
+            // suponemos v0 = true
+            cl_int result;
+            int b=8; int nx=(dim_i+b-1/b); int ny=(dim_o+b-1/b);
+            cl::NDRange globalSize(nx*b,ny*b);
+            cl::NDRange localSize(b,b);
+            result= OCLQueue.enqueueNDRangeKernel(kernelSkewOCL, cl::NullRange, globalSize, localSize);
+            if(result)
+                    exit(result);
+            OCLQueue.finish(); //Wait
+
+
         }
     }
 
@@ -499,26 +683,53 @@ template<typename T>
 void skewEngine<T>::kernel() {
     if(!isGPU) kernelcpu(this);
     else {
+        if(isCUDA) {
 #if defined(__CUDACC__)
 
-        if(!lineCUDA) {
-            dim3 threadsPerBlock(64, 8);
-            int gx = (skewHeight % threadsPerBlock.x == 0) ? skewHeight / threadsPerBlock.x :
-                     skewHeight / threadsPerBlock.x + 1;
-            int gy = (dim_i % threadsPerBlock.y == 0) ? dim_i / threadsPerBlock.y : dim_i / threadsPerBlock.y + 1;
-            dim3 blocksPerGrid(gx, gy);
-        //cudaStreamSynchronize(stream);
-            kernelgpu <<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewOutput,d_skewInput,dim_i,skewHeight,d_last,d_first,0.15f,newAngle);
+            if(!lineCUDA) {
+                dim3 threadsPerBlock(8, 8);
+                int gx = (dim_i % threadsPerBlock.x == 0) ? dim_i / threadsPerBlock.x : dim_i / threadsPerBlock.x + 1;
+                int gy = (skewHeight % threadsPerBlock.y == 0) ? skewHeight / threadsPerBlock.y : skewHeight / threadsPerBlock.y + 1;
+
+                dim3 blocksPerGrid(gx, gy);
+                //  dim3 blocksPerGrid(gy, gx);
+            //cudaStreamSynchronize(stream);
+                kernelcuda <<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewOutput,d_skewInput,dim_i,skewHeight,d_last,d_first,0.15f,newAngle);
+            }
+            else  //Experimento fallido??
+            {
+                dim3 threadsPerBlock(256, 1);
+                dim3 blocksPerGrid((dim_o + threadsPerBlock.x - 1) / threadsPerBlock.x, 1);
+            //cudaStreamSynchronize(stream);
+                kernelcuda <<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewOutput,d_skewInput,dim_i,skewHeight,d_last,d_first,0.15f,newAngle);
+
+            }
+#endif
         }
         else
         {
-            dim3 threadsPerBlock(256, 1);
-            dim3 blocksPerGrid((dim_o + threadsPerBlock.x - 1) / threadsPerBlock.x, 1);
-        //cudaStreamSynchronize(stream);
-            kernelgpu <<< blocksPerGrid, threadsPerBlock, 0, stream >>>(d_skewOutput,d_skewInput,dim_i,skewHeight,d_last,d_first,0.15f,newAngle);
+            kernMain.setArg(0, do_skewOutput) ;  //Target
+            kernMain.setArg(1, do_skewInput) ;  //Source
+            kernMain.setArg(2, dim_i);
+            kernMain.setArg(3, skewHeight);
+            kernMain.setArg(4, do_last);
+            kernMain.setArg(5, do_first);
+            kernMain.setArg(6, 0.15f);
+            kernMain.setArg(7, newAngle);
+
+
+            cl_int result;
+            //int b=8; int nx=(skewHeight+b-1)/b; int ny=(dim_i+b-1)/b;
+            int b=8; int ny=(skewHeight+b-1)/b; int nx=(dim_i+b-1)/b;
+            cl::NDRange globalSize(nx*b,ny*b);
+            cl::NDRange localSize(b,b);
+            result= OCLQueue.enqueueNDRangeKernel(kernMain, cl::NullRange, globalSize, localSize);
+            if(result)
+                exit(result);
+            OCLQueue.finish(); //Wait
+
 
         }
-#endif
     }
 }
 
@@ -570,18 +781,43 @@ void skewEngine<T>::deskew(int isMax){
     }
 
 
-#if defined(__CUDACC__)
     if(isGPU) {
+        if(isCUDA){
+
+#if defined(__CUDACC__)
         dim3 threadsPerBlock(8, 8);
-        int gx = (dim_o % threadsPerBlock.x == 0) ? dim_o / threadsPerBlock.x : dim_o / threadsPerBlock.x + 1;
-        int gy = (dim_i % threadsPerBlock.y == 0) ? dim_i / threadsPerBlock.y : dim_i / threadsPerBlock.y + 1;
+        int gx = (dim_i % threadsPerBlock.x == 0) ? dim_i / threadsPerBlock.x : dim_i / threadsPerBlock.x + 1;
+        int gy = (dim_o % threadsPerBlock.y == 0) ? dim_o / threadsPerBlock.y : dim_o / threadsPerBlock.y + 1;
         dim3 blocksPerGrid(gx, gy);
         if(useV0) cudaDeskewV0<<< blocksPerGrid, threadsPerBlock >>>(d_output+sectorType*N, d_skewOutput, skewness, dim_o, dim_i, d_weight,d_target);
         else cudaDeskew<<< blocksPerGrid, threadsPerBlock,0,stream >>>(d_output+sectorType*N, d_skewOutput, skewness, dim_o, dim_i);
         cudaStreamSynchronize(stream);
-
-    }
 #endif
+        }
+        else
+        {
+            //OpenCL DeSkew
+
+            kernelDeskewOCL.setArg(0, (float)skewness);
+            kernelDeskewOCL.setArg(1, dim_o);
+            kernelDeskewOCL.setArg(2, dim_i);
+            kernelDeskewOCL.setArg(3, do_output);
+            kernelDeskewOCL.setArg(4, do_skewOutput) ;  //skewInput to test identity
+            kernelDeskewOCL.setArg(5,N*sectorType);
+            if(useV0)kernelDeskewOCL.setArg(6, do_weight);
+            if(useV0)kernelDeskewOCL.setArg(7, do_target);
+                    // suponemos v0 = true
+            cl_int result;
+            int b=8; int nx=(dim_i+b-1/b); int ny=(dim_o+b-1/b);
+            cl::NDRange globalSize(nx*b,ny*b);
+            cl::NDRange localSize(b,b);
+            result= OCLQueue.enqueueNDRangeKernel(kernelDeskewOCL,  cl::NullRange, globalSize, localSize);
+            if(result!=CL_SUCCESS) //https://chat.openai.com/share/caab4a5c-2e98-4b90-8d27-2e953bfdd4d5
+                exit(result);
+            OCLQueue.finish(); //Wait
+
+        }
+    }
 }
 
 /**
@@ -613,16 +849,27 @@ void skewEngine<T>::reduce(T **output) {
 template<typename T>
 void skewEngine<T>::reduce(T *output, int isMax) {
 
-#if defined(__CUDACC__)
 
     if(isGPU)   {
-        if(output0!= nullptr)cudaMemcpyAsync(output0, d_output+0*N, N * sizeof(T), cudaMemcpyDeviceToHost, stream);
+        if(isCUDA){
+#if defined(__CUDACC__)
+            if(output0!= nullptr)cudaMemcpyAsync(output0, d_output+0*N, N * sizeof(T), cudaMemcpyDeviceToHost, stream);
         if(output1!= nullptr)cudaMemcpyAsync(output1, d_output+1*N, N * sizeof(T), cudaMemcpyDeviceToHost, stream);
         if(output2!= nullptr)cudaMemcpyAsync(output2, d_output+2*N, N * sizeof(T), cudaMemcpyDeviceToHost, stream);
         if(output3!= nullptr)cudaMemcpyAsync(output3, d_output+3*N, N * sizeof(T), cudaMemcpyDeviceToHost, stream);
         cudaStreamSynchronize(stream);
-    }
 #endif
+        }
+        else
+        {
+            if(output0!= nullptr)OCLQueue.enqueueReadBuffer(do_output, CL_TRUE, sizeof(T)  *0*dimx*dimy,sizeof(T)  * dimy * dimx, output0);
+            if(output1!= nullptr)OCLQueue.enqueueReadBuffer(do_output, CL_TRUE, sizeof(T)  *1*dimx*dimy,sizeof(T)  * dimy * dimx, output1);
+            if(output2!= nullptr)OCLQueue.enqueueReadBuffer(do_output, CL_TRUE, sizeof(T)  *2*dimx*dimy,sizeof(T)  * dimy * dimx, output2);
+            if(output3!= nullptr)OCLQueue.enqueueReadBuffer(do_output, CL_TRUE, sizeof(T)  *3*dimx*dimy,sizeof(T)  * dimy * dimx, output3);
+            //OCLQueue.finish();
+
+        }
+    }
 switch(isMax) {
     case 1:
         for (int i = 0; i < dimy; i++) {
@@ -731,17 +978,37 @@ template<typename T>
 void skewEngine<T>::skewOCLMalloc() {
 
     //OCLQueue=cl::CommandQueue(OCLContext);
+    do_first=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, sizeof(unsigned short int) * 2 *(dim_l+1));
+    do_last=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, sizeof(unsigned short int) * 2 *(dim_l+1));
+    do_target=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, sizeof(int) * dim_l);
+    do_weight=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, sizeof(float) * dim_l);
 
-    do_input=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, sizeof(T) * 4 * dimy * dimx);
-    do_output=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, sizeof(T) * 4 * dimy * dimx);
-    do_skewInput=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, sizeof(T) * (2 * dimy * dimx + 2*dim_l) );
-    do_skewOutput=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, sizeof(T) * (2 * dimy * dimx + 2*dim_l) );
-    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 0*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input0);
-    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 1*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input1);
-    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 2*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input2);
-    OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 3*dimx*dimy,sizeof(T) * 4 * dimy * dimx, input.input3);
-    cl_uint pattern = 0;
-    OCLQueue.enqueueFillBuffer(do_skewOutput,0, 0,4*dimy * dimx * sizeof(T) );
+    size_t st=4*sizeof(T)*dimx*dimy;
+    do_input=cl::Buffer(OCLContext, CL_MEM_READ_ONLY, st);
+    do_output=cl::Buffer(OCLContext, CL_MEM_WRITE_ONLY, st);
+    st=sizeof(T)*2*(dimx*dimy+dim_l);
+    do_skewInput=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, st);
+    do_skewOutput=cl::Buffer(OCLContext, CL_MEM_READ_WRITE, st );
+    cl_int error;
+    T pattern = 0;
+    st=sizeof(T)*2*(dimx*dimy+dim_l);
+    error=OCLQueue.enqueueFillBuffer(do_skewOutput,pattern, 0,st );
+    if(error)
+        exit(0);
+    st=sizeof(T)*dimx*dimy;
+    error=OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 0*st, st, input.input0);
+    if(error)
+        exit(0);
+    error=OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 1*st,st, input.input1);
+    if(error)
+        exit(0);
+    error=OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 2*st,st, input.input2);
+    if(error)
+        exit(0);
+    error=OCLQueue.enqueueWriteBuffer(do_input, CL_TRUE, 3*st,st, input.input3);
+    if(error)
+        exit(0);
+    OCLQueue.finish();
     }
 
 template<typename T>
@@ -790,5 +1057,6 @@ template<typename T>
 void skewEngine<T>::skewOCLFree() {
     // cl::Buffer objects are deleted automnatically once they go out of scope.
     OCLQueue.finish();
+
 }
 #endif

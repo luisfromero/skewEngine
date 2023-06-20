@@ -147,19 +147,21 @@ bool check_dem(std::string argv) {
  *
  * @param filename
  */
-void configureSDEM(char *filename)
+void configureSDEM(char *filename,int cropx=0, int cropy=0)
 {
     char fn[100];
+    bool crop=cropx>0 ||cropy>0;
     strcpy(fn,I_DIR);
     strcat(fn,filename);
     inputD = new float[dim];
-    readBilData(fn, inputD);
+        readBilData(fn, inputD,cropx,cropy);
     surScale=M_PI/(360*step*step);
     POVh=obsheight/step;
     if(verbose) {
         printf("Allocating DEM (from %s, with filesize: %dx%d and step %f) and setting observer's height to %f\n", filename, dimx, dimy,step,obsheight);
     }
-    check_dem(fn);
+    if(!crop)
+        check_dem(fn);
 }
 
 
@@ -218,16 +220,18 @@ void kernelV3(skewEngine<float> *skewer)
     }
 
 }
+
+
 __global__
 void kernelV3cuda(float *skewOutput, float *skewInput, int dim_i, int skewHeight, unsigned short *d_last, unsigned short *d_first, float POVh, int angle) {
 
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
-    if(row >= skewHeight)return;
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    //if(row >= skewHeight)return;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
     int start, end;
     start=d_first[row];
     end=d_last[row];
-    if(col>=end&&col<start)return;
+    //if(col>=end||col<start)return;
     float torads=M_PI/180;
     float inrads=angle*torads;
     float r = 1.0 / pow(cos(inrads),2);
@@ -281,12 +285,157 @@ void kernelV3cuda(float *skewOutput, float *skewInput, int dim_i, int skewHeight
 
 }
 
+const std::string kernelV3OCL =            "__kernel\n"
+                                    "       void mainKernel(\n"
+                                    "            global float *skewOutput, \n"
+                                    "            global float *skewInput, \n"
+                                    "            int dim_i, \n"
+                                    "            int skewHeight,\n"
+                                    "            global unsigned short *last,\n"
+                                    "            global unsigned short *first, \n"
+                                    "            float POVh, \n"
+                                    "            int angle) \n"
+                                    "        {\n"
+                                    "        int row,col;"
+                                    "        //row= get_group_id(0) * get_local_size(0) + get_local_id(0);\n"
+                                    "        row= get_group_id(1) * get_local_size(1) + get_local_id(1);\n"
+                                    "        if(row >= skewHeight)return;\n"
+                                    "        //col = get_group_id(1) * get_local_size(1) + get_local_id(1);\n"
+                                    "        col = get_group_id(0) * get_local_size(0) + get_local_id(0);\n"
+                                    "        int start, end;\n"
+                                    "        start=first[row];\n"
+                                    "        end=last[row];\n"
+                                    "        if(col>=end||col<start)return;\n"
+                                    "        float torads=M_PI/180;\n"
+                                    "        float inrads=angle*torads;\n"
+                                    "        float coseno=cos(inrads);"
+                                    "        //float r = 1.0 / (coseno*coseno);\n"
+                                    "        float r = 1.0 / pown(cospi(angle/180.0),2);\n"
+                                    "        float cv, h, max_angle, open_delta_d, delta_d, cAngle;\n"
+                                    "        bool visible, above, opening, closing;\n"
+                                    "            cv = 0;\n"
+                                    "            h = skewInput[row * dim_i + col] + POVh;\n"
+                                    "            max_angle = -2000;\n"
+                                    "            visible = true;\n"
+                                    "            open_delta_d = 0;\n"
+                                    "\n"
+                                    "            for (int k = col + 1; k >= start && k < end; k++) {\n"
+                                    "\n"
+                                    "                delta_d = k - col;\n"
+                                    "                cAngle = (skewInput[row * dim_i + k] - h) / delta_d;\n"
+                                    "                above = (cAngle > max_angle);\n"
+                                    "                opening = above && (!visible);\n"
+                                    "                closing = (!above) && (visible);\n"
+                                    "\n"
+                                    "                visible = above;\n"
+                                    "                max_angle = fmax(cAngle, max_angle);\n"
+                                    "                if (opening) open_delta_d = delta_d;\n"
+                                    "                if (closing) cv += (delta_d * delta_d - open_delta_d * open_delta_d);\n"
+                                    "            }\n"
+                                    "\n"
+                                    "            max_angle = -2000;\n"
+                                    "            visible = true;\n"
+                                    "            open_delta_d = 0;\n"
+                                    "\n"
+                                    "            for (int k = col - 1; k >= start && k < end; k--) {\n"
+                                    "\n"
+                                    "                delta_d = col - k;\n"
+                                    "                cAngle = (skewInput[row * dim_i + k] - h) / delta_d;\n"
+                                    "                above = (cAngle > max_angle);\n"
+                                    "                opening = above && (!visible);\n"
+                                    "                closing = (!above) && (visible);\n"
+                                    "\n"
+                                    "                visible = above;\n"
+                                    "                max_angle = fmax(cAngle, max_angle);\n"
+                                    "                if (opening) open_delta_d = delta_d;\n"
+                                    "                if (closing) cv += (delta_d * delta_d - open_delta_d * open_delta_d);\n"
+                                    "\n"
+                                           "        }\n"
+                                    "            skewOutput[row * dim_i + col] = cv * r;\n"
+                                    "\n"
+                                    "    }\n"
+                                    "\n"
+                                    "\n"
+                                    "\n"
+                                    "";
+/*
+    __kernel
+    void kernelSDEM(
+            global float *skewOutput,
+            global float *skewInput,
+            int dim_i,
+            int skewHeight,
+            global unsigned short *d_last,
+            global unsigned short *d_first,
+            float POVh,
+            int angle)
+        {
+        int row = get_group_id(0) * get_local_size(0) + get_local_id(0);
+        if(row >= skewHeight)return;
+        int col = get_group_id(1) * get_local_size(1) + get_local_id(1);
+        int start, end;
+        start=d_first[row];
+        end=d_last[row];
+        if(col>=end&&col<start)return;
+        float torads=M_PI/180;
+        float inrads=angle*torads;
+        float r = 1.0 / pow(cos(inrads),2);
+        float cv, h, max_angle, open_delta_d, delta_d, cAngle;
+        bool visible, above, opening, closing;
+//    if (row < endGPUbatch && col >= start && col < end)\n
+        {
+            cv = 0;
+            h = skewInput[row * dim_i + col] + POVh;
+            max_angle = -2000;
+            visible = true;
+            open_delta_d = 0;
 
+            for (int k = col + 1; k >= start && k < end; k++) {
+
+                delta_d = k - col;
+                cAngle = (skewInput[row * dim_i + k] - h) / delta_d;
+                above = (cAngle > max_angle);
+                opening = above && (!visible);
+                closing = (!above) && (visible);
+
+                visible = above;
+                max_angle = std::max(cAngle, max_angle);
+                if (opening) open_delta_d = delta_d;
+                if (closing) cv += (delta_d * delta_d - open_delta_d * open_delta_d);
+            }
+
+            max_angle = -2000;
+            visible = true;
+            open_delta_d = 0;
+
+            for (int k = col - 1; k >= start && k < end; k--) {
+
+                delta_d = col - k;
+                cAngle = (skewInput[row * dim_i + k] - h) / delta_d;
+                above = (cAngle > max_angle);
+                opening = above && (!visible);
+                closing = (!above) && (visible);
+
+                visible = above;
+                max_angle = std::max(cAngle, max_angle);
+                if (opening) open_delta_d = delta_d;
+                if (closing) cv += (delta_d * delta_d - open_delta_d * open_delta_d);
+            }
+
+            skewOutput[row * dim_i + col] = cv * r;
+        }
+
+    }
+
+*/
 
 
 void showResultsSDEM()
 {
-
+    std::string  fn=O_DIR;
+    std::FILE*  pFile;
+    pFile = fopen ((fn+"4070000_0310000_010.flt").c_str(), "wb");
+    std::fwrite(outD,sizeof(*outD),dim,pFile);
 }
 
 

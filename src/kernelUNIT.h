@@ -23,9 +23,11 @@ void identity(skewEngine<float> *skewEngine)
 }
 __global__
 void identityCuda(float *d_skewOutput, float *d_skewInput, int dim_i, int skewHeight,  unsigned short * d_last,unsigned short * d_first, float val, int ang) {
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    //int row = blockIdx.x * blockDim.x + threadIdx.x;
     if(row>=skewHeight)return;
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    //int col = blockIdx.y * blockDim.y + threadIdx.y;
     int start, end;
     start=d_first[row];
     end=d_last[row];
@@ -36,10 +38,20 @@ void identityCuda(float *d_skewOutput, float *d_skewInput, int dim_i, int skewHe
 }
 
 
-void identityOCL(float *d_skewOutput, float *d_skewInput, int dim_i, int skewHeight,  unsigned short * d_last,unsigned short * d_first, float val, int ang)
-{
+const std::string identityOCL=
+        "__kernel void mainKernel(global float* T, global float *S, int w, int h, global unsigned short *last, global unsigned short *first, float val, int ang)"
+        "   {\n"
+        "//    int row = get_group_id(0) * get_local_size(0) + get_local_id(0);\n"
+        "    int row = get_group_id(1) * get_local_size(1) + get_local_id(1);\n"
+        "    if(row>h)return;\n"
+        "//    int col = get_group_id(1) * get_local_size(1) + get_local_id(1);\n"
+        "    int col = get_group_id(0) * get_local_size(0) + get_local_id(0);\n"
+        "    if(col<first[row])return;\n"
+        "    if(col>=last[row])return;\n"
+        "    int i=row*w+col;\n"
+        "       T[i]=S[i];\n"
+        "   }\n";
 
-}
 
 void showResultsUNIT()
 {

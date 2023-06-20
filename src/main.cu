@@ -61,7 +61,7 @@ void execute(int skewAlgorithm)
     samplePoints.push_back(punto2);
     samplePoints.push_back(punto3);
 
-    for (int i = 0; i < 180; i++)allocSampleData(i);
+    for (int i = 0; i < maxSector ; i++)allocSampleData(i);
 
 
 #pragma omp parallel default(none) shared(inData,dimx,dimy,runMode,gpuMode,OCLDevices,outD,maxSector,skewAlgorithm,timing)
@@ -71,52 +71,68 @@ void execute(int skewAlgorithm)
 // Each thread (in CPU mode -> arbitrary)  (in GPU mode -> nthreads = num of GPUs) has its own engine:
         skewEngine<float> *skewer=new skewEngine<float>(dimx, dimy, static_cast<inputData<float>>(inData), runMode == GPU_MODE,id);
         //Dentro del constructor? ->
-        cl::Context OCLContext=NULL;
+        cl::Context OCLContext;
         cl::Device OCLDevice;
         if(runMode==GPU_MODE && gpuMode == OPENCL_MODE) {
             skewer->isCUDA=false;
-            skewer->OCLContext = OCLContext;
             OCLDevice=OCLDevices[id];
             skewer->OCLDevice =OCLDevice;
-            cl::CommandQueue OCLQueue(OCLContext,OCLDevice);
+            OCLContext=cl::Context(OCLDevice);
+            skewer->OCLContext = OCLContext;
+            cl::CommandQueue OCLQueue;
+            OCLQueue= cl::CommandQueue(OCLContext,OCLDevice);
             skewer->OCLQueue = OCLQueue;
         }
+
+
+        switch(skewAlgorithm) {
+            case KERNEL_SDEM:
+                skewer->kernelcpu = kernelV3;
+                skewer->kernelcuda =kernelV3cuda;
+                skewer->kernelOCL = kernelV3OCL;
+                break;
+            case KERNEL_RADON:
+                cufftHandle plan, cb_plan;
+                size_t work_size;
+                cufftCreate(&plan);
+                cufftCreate(&cb_plan);
+                cufftComplex *data;
+                cufftMakePlan1d(reinterpret_cast<cufftHandle>(&plan), sizeof(cufftComplex) * skewer->skewHeight, CUFFT_R2C, 1, &work_size);
+                skewer->kernelcpu = radon;
+                skewer->kernelcuda =kernelRadonCuda;
+                skewer->kernelOCL = kernelRadonOCL;
+                skewer->lineCUDA=true;
+                break;
+
+            case KERNEL_CEPSTRUM:
+                // Acumula
+                skewer->kernelcpu = cepstrum;
+                //ToDo Versión cepstrum  para CUDA
+                break;
+            default: // Casos 1 y 3
+                skewer->kernelcpu = identity;
+                skewer->kernelcuda = identityCuda;
+                skewer->kernelOCL = static_cast<const std::basic_string<char>>(identityOCL);
+                break;
+        }
+
+
+
+        skewer->skewAlloc();
+
+
+
+
 #pragma omp barrier
 #pragma omp for schedule(dynamic) nowait
         for (int i = 0; i < maxSector; i++) {
 
 
             skewer->skew(i);
-            switch(skewAlgorithm) {
-                case KERNEL_SDEM:
-                    skewer->kernelcpu = kernelV3;
-                    skewer->kernelgpu =kernelV3cuda;
-                    break;
-                case KERNEL_RADON:
-                    cufftHandle plan, cb_plan;
-                    size_t work_size;
-                    cufftCreate(&plan);
-                    cufftCreate(&cb_plan);
-                    cufftComplex *data;
-                    cufftMakePlan1d(reinterpret_cast<cufftHandle>(&plan), sizeof(cufftComplex) * skewer->skewHeight, CUFFT_R2C, 1, &work_size);
-                    skewer->kernelcpu = radon;
-                    skewer->kernelgpu =kernelRadonCuda;
-                    skewer->lineCUDA=true;
-                    break;
-
-                case KERNEL_CEPSTRUM:
-                    // Acumula
-                    skewer->kernelcpu = cepstrum;
-                    //ToDo Versión cepstrum  para CUDA
-                    break;
-                default: // Casos 1 y 3
-                    skewer->kernelcpu = identity;
-                    skewer->kernelgpu = gpuMode == OPENCL_MODE ? identityOCL: identityCuda;
-                    break;
-            }
 
 
             skewer->kernel();
+
 
             skewer->deskew(skewAlgorithm==4?   1:0);
             if(!timing)printf("id= %03d se=%03d\n",id,i);//fflush(stdout);
@@ -138,8 +154,11 @@ void execute(int skewAlgorithm)
 
 int main(int argc, char *argv[]) {
     fs::path p=fs::current_path();
-    skewAlgorithm=KERNEL_IDENTITYDEM;
+    skewAlgorithm=KERNEL_SDEM;
+    //skewAlgorithm=KERNEL_IDENTITYDEM;
+    runMode=CPU_MODE;
     runMode=GPU_MODE;
+    gpuMode=CUDA_MODE;
     gpuMode=OPENCL_MODE;
     configure(argc, argv); // Read input data (model, image...) and parameters
     setResources(dimx,dimy,runMode,gpuMode); // Create cpu and gpu interfaces, set nCPUs, nGPUs

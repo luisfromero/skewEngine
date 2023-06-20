@@ -26,19 +26,24 @@
 void configure(int argc, char *argv[], char * filename=NULL) {
     char fn[100];
     if(filename!=NULL)strcpy(fn,filename);
+    int cropx=0;int cropy=0;
     switch(skewAlgorithm)
     {
         case 0:
             if(filename==NULL)strcpy(fn,"4070000_0310000_010.bil");
             dimx=dimy=2000;
+            if(true){cropx=0;cropy=0;}
             N = dim = dimx * dimy;
-            configureSDEM(fn);
+            configureSDEM(fn,cropx,cropy);
+            N = dim = dimx * dimy;
             break;
         case 1:
             if(filename==NULL)strcpy(fn,"4070000_0310000_010.bil");
             dimx=dimy=2000;
+            if(true){cropx=0;cropy=0;}
             N = dim = dimx * dimy;
-            configureSDEM(fn);
+            configureSDEM(fn,cropx,cropy);
+            N = dim = dimx * dimy;
             break;
         case 2:
             if(filename==NULL)strcpy(fn,"blurred1.png");

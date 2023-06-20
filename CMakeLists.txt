@@ -66,7 +66,6 @@ set (HEADERS
 
 
 set (SOURCES
-        src/main.cu
         src/global.cpp
         src/third-party/Lodepng.cpp
         src/color.cpp
@@ -80,7 +79,7 @@ message("OpenCL: ${OpenCL_INCLUDE_DIRS} ${OpenCL_LIBRARY}")
 
 
 #include_directories(SYSTEM ./src)
-add_executable(skewEngine ${SOURCES})
+add_executable(skewEngine src/main.cu ${SOURCES})
 add_library(sk_engine SHARED ${SOURCES})
 target_include_directories(skewEngine
         INTERFACE
@@ -99,6 +98,7 @@ else()
 endif()
 
 target_link_libraries(skewEngine OpenCL::OpenCL)
+target_link_libraries(sk_engine OpenCL::OpenCL)
 
 set(CMAKE_CUDA_FLAGS_DEBUG  "--expt-relaxed-constexpr -g -Xcompiler  ${MYCUDAFLAGS}")
 set(CMAKE_CUDA_FLAGS_RELEASE   "--expt-relaxed-constexpr -O5 -Xcompiler ${MYCUDAFLAGS}")
