@@ -1,7 +1,7 @@
 /**
  * @file kernelBLUR.h
  * @author Felipe Romero
- * @brief Funciones específicas del kernel de cálculo del CEPSTRUM
+ * @brief Specific functions of the Cepstrum calculation kernel
  */
 
 #ifndef KCEP_H

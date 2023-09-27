@@ -1,3 +1,22 @@
+/**
+ * @file 
+ * @brief Main executable file for skewengine example application.
+ *
+ * This file contains the main function of an executable that serves as an example
+ * of an application utilizing the skewengine class. The main function allows the
+ * selection of algorithms and execution modes (CUDA, OpenCL, or CPU threads).
+ *
+ * If you do not have a CUDA compiler, this application should still function
+ * by appropriately configuring preprocessor options, although this has not been
+ * verified.
+ *
+ * @author Felipe Romero
+ * @author Luis F. Romero
+ * @date 2023-09-26
+ *
+ * @todo Verify functionality as a DLL on Windows and Linux.
+ */
+
 #include <cstdio>
 #include <fstream>
 #include <omp.h>
@@ -155,11 +174,12 @@ void execute(int skewAlgorithm)
 int main(int argc, char *argv[]) {
     fs::path p=fs::current_path();
     skewAlgorithm=KERNEL_SDEM;
-    //skewAlgorithm=KERNEL_IDENTITYDEM;
+    skewAlgorithm=KERNEL_IDENTITYDEM;
+    skewAlgorithm=KERNEL_RADON;
     runMode=CPU_MODE;
     runMode=GPU_MODE;
     gpuMode=CUDA_MODE;
-    gpuMode=OPENCL_MODE;
+    //gpuMode=OPENCL_MODE;
     configure(argc, argv); // Read input data (model, image...) and parameters
     setResources(dimx,dimy,runMode,gpuMode); // Create cpu and gpu interfaces, set nCPUs, nGPUs
     //Allocate es static. El objeto aún no existe

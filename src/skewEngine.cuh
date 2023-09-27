@@ -1,14 +1,15 @@
-//
-// Created by Felipe on 23-11-22.
-//
-// Clase para mapear datos 2D de entrada en datos con sesgo (data -> skew)
-//
-// Los datos en formato sesgado tienen alineados datos en memoria que en
-// formato original no lo estarían
-//
-// Tras el procesamiento (por una función externa a la clase),
-// Los datos procesados se remapean a la posición original (skeOut -> Out)
-//
+/**
+ * @file data_skew_mapping.h
+ * @brief Class for mapping 2D input data to skewed data (data -> skew).
+ *
+ * Skewed data format aligns data in memory that wouldn't be aligned
+ * in the original format.
+ *
+ * After processing (by an external function to the class),
+ * the processed data is remapped to the original position (skewOut -> Out).
+ *
+ * @date 11/23/22.
+ */
 
 //
 
@@ -160,6 +161,17 @@ class skewEngine {
             "}"
             ;
     std::string openCL_kernel_skew =
+            "void atomic_add_f(volatile global float* addr, const float val) {\n"
+            "    union {\n"
+            "        uint  u32;\n"
+            "        float f32;\n"
+            "    } next, expected, current;\n"
+            "    current.f32 = *addr;\n"
+            "    do {\n"
+            "        next.f32 = (expected.f32=current.f32)+val; // ...*val for atomic_mul_f()\n"
+            "        current.u32 = atomic_cmpxchg((volatile global uint*)addr, expected.u32, next.u32);\n"
+            "    } while(current.u32!=expected.u32);\n"
+            "}"
             "__kernel void kernelSkew(float skewness, "
             "    int dim_o, int dim_i, "
             "    global float* skewed,"
@@ -285,7 +297,7 @@ public:
 
     int *target;
     float *weight;
-    bool useV0=true; //slightly better in CUDA, bad in OpenCL  (weigth and target precomputed or not in gpu)
+    bool useV0=false; //slightly better in CUDA, bad in OpenCL  (weigth and target precomputed or not in gpu)
 
 
     //  *******************************************************************************
@@ -687,7 +699,7 @@ void skewEngine<T>::kernel() {
 #if defined(__CUDACC__)
 
             if(!lineCUDA) {
-                dim3 threadsPerBlock(8, 8);
+                dim3 threadsPerBlock(16, 16);
                 int gx = (dim_i % threadsPerBlock.x == 0) ? dim_i / threadsPerBlock.x : dim_i / threadsPerBlock.x + 1;
                 int gy = (skewHeight % threadsPerBlock.y == 0) ? skewHeight / threadsPerBlock.y : skewHeight / threadsPerBlock.y + 1;
 

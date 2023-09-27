@@ -1,11 +1,8 @@
-//
-// Created by Felipe on 11-12-22.
-//
-
 /**
  * @file main.h
  * @author Felipe Romero
- * @brief Sólo simplifica el ejecutable main
+ * @brief Other main functions. Separated into a header to make the code more readable.
+ * @date 2022-11-17
  */
 
 // 0 Skew DEM
@@ -114,7 +111,7 @@ void setResources(int dimx,int dimy, int runMode=CPU_MODE, int gpuMode=CUDA_MODE
 
 /**
  * Ejecución del skewEngine
- * @param skewAlgorithm Algoritmo que se implementa (totalviewshed, transformada radon, identidades, ...)
+ * @param skewAlgorithm Algorithm selection (totalviewshed, transformada radon, identidades, ...)
  */
 void execute(int skewAlgorithm=0);
 
@@ -130,8 +127,8 @@ void showResults(int skewAlgorithm) {
     float autoScale = 255/(mm.max-mm.min);
     if (skewAlgorithm == 0)escala = M_PI/(360*10*10); //scales to hectometers
     if (skewAlgorithm == 1)escala = 1/180.0; //scales to max
-    if (skewAlgorithm == 2)escala = autoScale;//1.0/180;  //radon
-    if (skewAlgorithm == 3)escala = 1.0 / 540; //identity blur
+    if (skewAlgorithm == 2)escala = autoScale;//Gray scale
+    if (skewAlgorithm == 3)escala = 1.0 / 540; //identity blur (180*3 RGB to grayscale)
 
     printf("Extreme values (unscaled) for output: %6.2f | %e  \n ", mm.min , mm.max );
     printf("Extreme values for output: %6.2f | %e  (scale = %f )\n ", (mm.min * escala), mm.max * escala, escala);

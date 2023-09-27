@@ -1,7 +1,7 @@
 /**
  * @file kernelUNIT.h
  * @author Felipe Romero
- * @brief Funciones específicas para el módulo con el kernel Identity
+ * @brief Specific functions of the Identity kernel
  *
  * Modelo para otros kernel
  */
@@ -43,11 +43,11 @@ const std::string identityOCL=
         "   {\n"
         "//    int row = get_group_id(0) * get_local_size(0) + get_local_id(0);\n"
         "    int row = get_group_id(1) * get_local_size(1) + get_local_id(1);\n"
-        "    if(row>h)return;\n"
+        "//    if(row>h)return;\n"
         "//    int col = get_group_id(1) * get_local_size(1) + get_local_id(1);\n"
         "    int col = get_group_id(0) * get_local_size(0) + get_local_id(0);\n"
-        "    if(col<first[row])return;\n"
-        "    if(col>=last[row])return;\n"
+        "//    if(col<first[row])return;\n"
+        "//    if(col>=last[row])return;\n"
         "    int i=row*w+col;\n"
         "       T[i]=S[i];\n"
         "   }\n";

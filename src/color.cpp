@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Felipe Romero
- * @brief Funciones para la creación y manipulación de mapas de colores, datos HSV o RGB, etc.
+ * @brief Functions for the creation and manipulation of color maps, HSV or RGB data, etc.
  */
 //
 // Created by Felipe on 17-11-22.

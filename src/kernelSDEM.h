@@ -1,7 +1,7 @@
 /**
  * @file kernelSDEM.h
  * @author Felipe Romero
- * @brief Funciones específicas del kernel para el módulo de cálculo de total viewshed
+ * @brief Specific functions of the total viewshed calculation kernel
  */
 
 #ifndef KSDEM_H

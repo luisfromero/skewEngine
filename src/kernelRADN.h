@@ -1,7 +1,7 @@
 /**
  * @file kernelRADN.h
  * @author Felipe Romero
- * @brief Funciones específicas del kernel para la transformada RADON
+ * @brief Specific functions of the Radon kernel
  */
 
 #ifndef KRND_H

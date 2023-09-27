@@ -57,7 +57,7 @@ point_t punto3={600,536};
 
 
 //**********************************************************************************
-//                   SKEWENGINE  2023  (generales)
+//                   SKEWENGINE executable  2023  (globals)
 //**********************************************************************************
 
 int runMode=GPU_MODE; // 0 cpu, 1 gpu, 2 hybrid task farm en el futuro

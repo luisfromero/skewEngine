@@ -1,6 +1,10 @@
-//
-// Created by Felipe on 20-2-23.
-//
+/**
+ * @file
+ * @author Felipe Romero
+ * @brief Auxiliary functions (filesystem, fft, data, png)
+ * @date 2022-11-17
+ */
+
 
 #ifndef SKEWENGINE_HELPER_H
 #define SKEWENGINE_HELPER_H

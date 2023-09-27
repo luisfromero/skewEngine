@@ -1,6 +1,9 @@
-//
-// Created by Felipe on 19-2-23.
-//
+/**
+ * @file
+ * @author Felipe Romero
+ * @brief Some basic structures (included in global.h and color.h)
+ * @date 2022-11-17
+ */
 
 #ifndef SKEWENGINE_STRUCTURES_H
 #define SKEWENGINE_STRUCTURES_H

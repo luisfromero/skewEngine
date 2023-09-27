@@ -1,6 +1,10 @@
-//
-// Created by Felipe on 17-11-22.
-//
+/**
+ * @file
+ * @author Felipe Romero
+ * @brief Constants and defines  (included in global.h)
+ * @date 2022-11-17
+ */
+
 #ifndef DEFAULTS_H
 #define DEFAULTS_H
 

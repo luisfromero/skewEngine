@@ -1,3 +1,11 @@
+/**
+ * @file
+ * @author Felipe Romero
+ * @brief Timing variables, externs, etc.
+ * @date 2022-11-17
+ */
+
+
 //#pragma once
 #ifndef SKE_GLOBAL_H
 #define SKE_GLOBAL_H
